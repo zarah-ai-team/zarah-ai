@@ -237,8 +237,10 @@ def _parse_simple_field_changes(message: str) -> dict:
     changes: Dict[str, Any] = {}
     m = message.lower()
 
-    # Pax / adults
-    pax_m = re.search(r"(?:change|update|make it|now|for|to)?\s*(\d+)\s*(?:pax|people|adults?|persons?|travelers?|guests?)", m)
+    # Pax / adults — handles both "change pax to 10" and "10 pax"
+    pax_m = re.search(r"(?:change|update|set|make)\s+(?:pax|people|travelers?)\s+(?:to|as)?\s*(\d+)", m)
+    if not pax_m:
+        pax_m = re.search(r"(\d+)\s*(?:pax|people|adults?|persons?|travelers?|guests?)", m)
     if pax_m:
         changes["pax"] = int(pax_m.group(1))
 
@@ -248,23 +250,43 @@ def _parse_simple_field_changes(message: str) -> dict:
         changes["seniors"] = int(sen_m.group(1))
         changes["senior_friendly"] = True
 
-    # Nights
-    nights_m = re.search(r"(?:change|update|make it|now|to|for)?\s*(\d+)\s*nights?", m)
+    # Nights — handles "change nights to 10" and "10 nights"
+    nights_m = re.search(r"(?:change|update|set|make)\s+(?:nights?|duration)\s+(?:to|as)?\s*(\d+)", m)
+    if not nights_m:
+        nights_m = re.search(r"(\d+)\s*nights?", m)
     if nights_m:
         n = int(nights_m.group(1))
         changes["total_nights"] = n
         changes["nights"] = n
-        changes["duration"] = n + 1
+        changes["duration"] = n
+
+    # Destination — "change destination to Vienna" / "go to Prague instead"
+    dest_m = re.search(r"(?:change|update|set)\s+destination\s+(?:to|as)\s+([A-Za-z\s]+?)(?:\s*$|,)", m)
+    if not dest_m:
+        dest_m = re.search(r"(?:go to|travel to|visit)\s+([A-Za-z\s]+?)\s+instead", m)
+    if dest_m:
+        changes["destination"] = dest_m.group(1).strip().title()
 
     # Hotel category
-    if re.search(r"5[\s\-]?star|five[\s\-]?star", m):
+    if re.search(r"(?:upgrade|change|update|set).*?5[\s\-]?star|5[\s\-]?star|five[\s\-]?star", m):
         changes["hotel_category"] = "5-Star"
     elif re.search(r"4[\s\-]?star\s*deluxe|four[\s\-]?star\s*deluxe", m):
         changes["hotel_category"] = "4-Star Deluxe"
     elif re.search(r"4[\s\-]?star|four[\s\-]?star", m):
         changes["hotel_category"] = "4-Star"
 
-    # Add senior-friendly if mentioned
+    # Start date — "start on 15 April" / "departure 10 May 2025"
+    date_m = re.search(
+        r"(?:start|depart|departure|from|on)\s+(?:on\s+)?(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?",
+        m
+    )
+    if date_m:
+        _MONTHS = {"january":"01","february":"02","march":"03","april":"04","may":"05","june":"06",
+                   "july":"07","august":"08","september":"09","october":"10","november":"11","december":"12"}
+        _d, _mon, _yr = date_m.group(1), date_m.group(2), date_m.group(3) or "2025"
+        changes["trip_start_date"] = f"{_yr}-{_MONTHS[_mon]}-{int(_d):02d}"
+
+    # Senior-friendly if mentioned
     if re.search(r"senior.?friendly|minimal\s+walking|comfortable\s+pace", m):
         changes["senior_friendly"] = True
         changes["walking_tolerance"] = "minimal"
@@ -276,7 +298,7 @@ def _build_confirmation_dict(fields: dict) -> dict:
     """Extract a clean summary dict from session fields for the confirmation card."""
     dests = fields.get("destinations") or []
     dest_str = " → ".join(dests) if dests else (fields.get("destination") or "")
-    total_nights = fields.get("total_nights") or fields.get("nights") or ""
+    total_nights = fields.get("total_nights") or fields.get("nights") or fields.get("duration") or ""
     try:
         total_days = int(total_nights) + 1 if total_nights else ""
     except (ValueError, TypeError):
@@ -514,11 +536,54 @@ async def chat(request: Request):
     # Append message to history
     session["history"].append({"role": "user", "content": req.message})
 
+    # ===== HANDLE PENDING CONFIRMATION RESPONSE =====
+    # If we previously showed the user a trip-details confirmation card, handle their reply.
+    _goto_generation = False
+    if session.get("pending_confirmation"):
+        if _is_user_confirming(req.message):
+            sc("User confirmed trip details; proceeding to itinerary generation")
+            session.pop("pending_confirmation", None)
+            session["confirmation_acknowledged"] = True
+            _goto_generation = True
+        else:
+            # User wants to change something — parse field edits and re-show confirmation
+            _mod = {}
+            try:
+                _mod = parse_formal_request(req.message)
+            except Exception:
+                pass
+            _simple = _parse_simple_field_changes(req.message)
+            # Also run conv_manager detector for free-form edits ("12 pax", "5-star", etc.)
+            try:
+                _conv_edits = conv_manager.detect_fields_in_text(req.message)
+            except Exception:
+                _conv_edits = {}
+            _merged = {**_conv_edits, **_mod, **_simple}  # simple wins over all
+            _updated_keys = []
+            for k, v in _merged.items():
+                if k not in ("raw_text", "is_formal_request") and v not in (None, "", []):
+                    session["fields"][k] = v
+                    _updated_keys.append(k)
+            sc(f"Confirmation: user requested field changes: {_updated_keys}")
+            # Acknowledge change and re-show updated confirmation
+            _ack = f"Got it! I've updated {', '.join(_updated_keys) if _updated_keys else 'your request'}. Here are the revised trip details:\n\n" if _updated_keys else ""
+            _confirm_msg = _ack + _build_confirmation_message(session["fields"])
+            session["pending_confirmation"] = {"fields": dict(session["fields"])}
+            session["history"].append({"role": "assistant", "content": _confirm_msg})
+            _sync_chat_to_store()
+            return {
+                "session_id": sid,
+                "need_confirmation": True,
+                "confirmation_fields": _build_confirmation_dict(session["fields"]),
+                "prompt": _confirm_msg,
+                "collected": session["fields"],
+            }
+
     # ===== HANDLE FOLLOW-UP TO A PENDING FORMAL REQUEST =====
     # If the user previously sent a formal request that was missing required fields,
     # we stored it as pending_formal_request. Now we try to extract the missing info
     # from this follow-up message and merge it in.
-    if session.get("pending_formal_request"):
+    if not _goto_generation and session.get("pending_formal_request"):
         sc("Handling follow-up reply to pending formal request; extracting missing fields")
         _pending_fields = dict(session["pending_formal_request"].get("partial_fields", {}))
 
@@ -556,9 +621,8 @@ async def chat(request: Request):
 
     # ===== CHECK FOR FORMAL REQUEST =====
     # Detect and parse formal/DMC-style travel request emails.
-    # When detected: wipe stale session fields, extract all fields, proceed directly
-    # to full itinerary generation — no two-step confirmation needed.
-    elif is_formal_request(req.message):
+    # When detected: wipe stale session fields, extract all fields, show confirmation.
+    elif not _goto_generation and is_formal_request(req.message):
         sc("Detected formal request format; extracting all fields and generating itinerary")
         parsed_formal = parse_formal_request(req.message)
         sc(f"Formal parsed: destinations={parsed_formal.get('destinations')} nights={parsed_formal.get('total_nights')} pax={parsed_formal.get('pax')}")
@@ -586,12 +650,13 @@ async def chat(request: Request):
             return {"session_id": sid, "need_more": True, "prompt": _clarification, "collected": session["fields"]}
 
         # Fall through to the main itinerary-generation pipeline below
+        # (confirmation will be shown by the universal gate further below)
         # (skip the conv_manager update — we already have all fields)
 
     # If the incoming message is JSON, parse and merge into session fields (the client sends structured JSON)
-    # Skip JSON/conv-manager handling when a formal request was just detected (fields already set above)
+    # Skip JSON/conv-manager handling when a formal request was just detected or confirmation acknowledged
     parsed_json = None
-    if not session.get("formal_request_detected"):
+    if not _goto_generation and not session.get("formal_request_detected"):
         try:
             parsed_json = json.loads(req.message)
         except Exception:
@@ -616,7 +681,7 @@ async def chat(request: Request):
             _sync_chat_to_store()
             return {"session_id": sid, "need_more": True, "prompt": prompt, "collected": session["fields"]}
         # else, proceed to generate itinerary
-    elif not session.get("formal_request_detected"):
+    elif not _goto_generation and not session.get("formal_request_detected"):
         # Update conversation manager with new message (standard conversation flow)
         update_result = conv_manager.update(session, req.message)
 
@@ -649,6 +714,25 @@ async def chat(request: Request):
     for _k in _bad_keys:
         sc(f"Removing corrupted field '{_k}' (looks like an error message)")
         fields.pop(_k, None)
+
+    # ── Universal confirmation gate ─────────────────────────────────────────────
+    # Before calling the LLM, always show the user a summary card to review and
+    # confirm (or edit) the extracted trip details. This gate fires for BOTH
+    # formal requests (already handled above) AND conversational flow.
+    # It is bypassed only when _goto_generation=True (user just confirmed).
+    if not _goto_generation and (fields.get("destination") or fields.get("destinations")):
+        _confirm_msg = _build_confirmation_message(fields)
+        session["pending_confirmation"] = {"fields": dict(fields)}
+        session["history"].append({"role": "assistant", "content": _confirm_msg})
+        _sync_chat_to_store()
+        return {
+            "session_id": sid,
+            "need_confirmation": True,
+            "confirmation_fields": _build_confirmation_dict(fields),
+            "prompt": _confirm_msg,
+            "collected": fields,
+        }
+    # ── End confirmation gate ───────────────────────────────────────────────────
 
     # ── Look up stored client record to enrich system prompt with client-type context ──
     _client_record = None
@@ -1118,59 +1202,70 @@ async def chat(request: Request):
         "- Output pure JSON only. No text before or after the JSON object."
     )
 
-    # Always include predicted cost with unit (USD) and instruct the LLM to output pure JSON
-    # Build a user prompt that strongly requests concrete activities, places to visit, times, and prices
-    if kb_summary:
-        # compute dynamic price estimates to include as background context
-        try:
-            price_ctx = price_engine.estimate_total(fields, int(fields.get("pax", 1)))
-            sc(f"Computed price context from price engine for pax={fields.get('pax', 1)}")
-        except Exception as e:
-            price_ctx = {}
-            sc(f"Price context computation failed: {e}")
-        user_prompt = (
-            f"User request:\n{fields}\nPredicted cost (total): ${predicted_cost:.2f} USD\n"
-            f"Estimated costs (derived): {price_ctx}\n"
-            f"Historical data (anonymized): {kb_summary}\n"
-            f"City summary (from Wikipedia): (fetched in parallel)\n"
-            f"Top attractions (name and short summary): (fetched in parallel)\n"
-            "Note: Hotel recommendations and live per-night pricing will be fetched after generating the itinerary using the configured hotel provider.\n"
-            "Requirements:\n"
-            "- Return exactly one JSON object and nothing else.\n"
-            "- Output the itinerary in the following structure exactly:\n"
-            "  Information: Destination, pax, travel date, arrival/departure dates\n"
-            "  Itinerary: Each day as 'Date/Day : Description' with brief bullet points (no exact times).\n"
-            "  Package Cost and Important Guidelines: Cost, Inclusions (Accommodation, guide details, driver, water bottles on board, fuel cost), Hotel Details (City, Hotel Name), Exclusions (Airfare, Visa cost, Tips, Any meal not mentioned, alcohol), Important Guidelines.\n"
-            "- Include transport details: if the user requested 'Lexus' or '12 hours', include a 12-hour Lexus taxi rental line with a realistic per-day rate.\n"
-            "- Include one full-day plan for Ferrari World with ticket price and suggested timings only when it was explicitly requested and the destination supports it.\n"
-            "- If budget seems ambiguous but currency is INR, assume shorthand (e.g., 50 -> 50,000) and note this in the JSON 'notes' field.\n"
-            "Return a single JSON object exactly matching the schema described in the system prompt."
-        )
-    else:
-        # compute dynamic price estimates to include as background context
-        try:
-            price_ctx = price_engine.estimate_total(fields, int(fields.get("pax", 1)))
-            sc(f"Computed price context from price engine for pax={fields.get('pax', 1)}")
-        except Exception as e:
-            price_ctx = {}
-            sc(f"Price context computation failed: {e}")
+    # Build user prompt — no formatting instructions here (system prompt owns those)
+    try:
+        price_ctx = price_engine.estimate_total(fields, int(fields.get("pax", 1)))
+        sc(f"Computed price context from price engine for pax={fields.get('pax', 1)}")
+    except Exception as e:
+        price_ctx = {}
+        sc(f"Price context computation failed: {e}")
 
-        user_prompt = (
-            f"User request:\n{fields}\nPredicted cost (total): ${predicted_cost:.2f} USD\n"
-            f"Estimated costs (derived): {price_ctx}\n"
-            f"City summary (from Wikipedia): (fetched in parallel)\n"
-            f"Top attractions (name and short summary): (fetched in parallel)\n"
-            "Note: Hotel recommendations and live per-night pricing will be fetched after generating the itinerary using the configured hotel provider.\n"
-            "Requirements:\n"
-            "- Return exactly one JSON object and nothing else.\n"
-            "- Output the itinerary in the following structure exactly:\n"
-            "  Information: Destination, pax, travel date, arrival/departure dates\n"
-            "  Itinerary: Each day as 'Date/Day : Description' with brief bullet points (no exact times).\n"
-            "  Package Cost and Important Guidelines: Cost, Inclusions (Accommodation, guide details, driver, water bottles on board, fuel cost), Hotel Details (City, Hotel Name), Exclusions (Airfare, Visa cost, Tips, Any meal not mentioned, alcohol), Important Guidelines.\n"
-            "- Do NOT include specific clock times. Use concise point-form descriptions for activities.\n"
-            "- If budget seems ambiguous but currency is INR, assume shorthand (e.g., 50 -> 50,000) and note this in the JSON 'notes' field.\n"
-            "Real-time data (Wikipedia + attractions + local news) will be provided as context. Return a single JSON object exactly matching the schema described in the system prompt."
-        )
+    # Build a clean, readable summary of confirmed trip fields
+    def _fmt_fields_for_prompt(f: dict) -> str:
+        lines = []
+        dests = f.get("destinations")
+        if dests and isinstance(dests, list):
+            lines.append(f"Route: {' → '.join(dests)}")
+        elif f.get("destination"):
+            lines.append(f"Destination: {f['destination']}")
+        _nights_val = f.get("total_nights") or f.get("nights") or f.get("duration")
+        if _nights_val:
+            try:
+                nd = int(_nights_val)
+                lines.append(f"Duration: {nd} nights / {nd + 1} days")
+            except Exception:
+                lines.append(f"Duration: {_nights_val} nights")
+        if f.get("nights_per_city"):
+            npc = ", ".join(f"{c}: {n} nights" for c, n in f["nights_per_city"].items())
+            lines.append(f"Nights per city: {npc}")
+        if f.get("pax"):
+            sen = f" (incl. {f['seniors']} senior citizens 60+)" if f.get("seniors") else ""
+            lines.append(f"Travelers: {f['pax']} adults{sen}")
+        if f.get("hotel_category"):
+            loc = f" — {f['hotel_location_preference']}" if f.get("hotel_location_preference") else ""
+            lines.append(f"Hotel: {f['hotel_category']}{loc}")
+        if f.get("trip_start_date"):
+            lines.append(f"Start date: {f['trip_start_date']}")
+        if f.get("event_type"):
+            lines.append(f"Trip type: {f['event_type']}")
+        if f.get("transport_preference"):
+            lines.append(f"Transport: {f['transport_preference']}")
+        if f.get("room_config"):
+            rc = ", ".join(f"{v} {k} room(s)" for k, v in f["room_config"].items())
+            lines.append(f"Room config: {rc}")
+        if f.get("guide_required"):
+            lines.append("Guide: English-speaking local guide required")
+        if f.get("preferred_activities"):
+            lines.append(f"Activities requested: {', '.join(f['preferred_activities'])}")
+        if f.get("budget_per_person"):
+            lines.append(f"Budget: {f.get('budget_currency','INR')} {f['budget_per_person']}/person")
+        return "\n".join(lines)
+
+    _raw_req = fields.get("raw_text", "")
+    _fields_summary = _fmt_fields_for_prompt(fields)
+
+    user_prompt = "CONFIRMED TRIP DETAILS:\n" + _fields_summary
+    if predicted_cost:
+        user_prompt += f"\n\nML cost estimate: USD {predicted_cost:.0f}"
+    if price_ctx:
+        user_prompt += f"\nCost reference: {price_ctx}"
+    if kb_summary:
+        user_prompt += f"\n\nHistorical reference (anonymized):\n{kb_summary}"
+    if _raw_req:
+        user_prompt += f"\n\nOriginal client request (read for any additional context or specific requests):\n{_raw_req}"
+    if _num_days:
+        user_prompt += f"\n\nCRITICAL REQUIREMENT: Generate EXACTLY {_num_days} day objects (one per day, {_total_nights_int} nights). Do NOT stop early."
+    user_prompt += "\n\nReturn a single valid JSON object matching the schema in the system prompt. Output JSON only — no prose, no markdown fences."
     # We will NOT return raw match lists in the API response — the LLM can use the knowledge quietly.
     include_matches_in_response = False
 

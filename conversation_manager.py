@@ -376,6 +376,12 @@ class ConversationManager:
 
     def _apply_defaults(self, fields: Dict[str, Any]) -> None:
         """Fill in optional fields with smart defaults so we never need to ask for them."""
+        # If user said "X nights", treat it as duration so we don't re-ask
+        if "nights" in fields and "duration" not in fields:
+            fields["duration"] = fields["nights"]
+        if "total_nights" in fields and "duration" not in fields:
+            fields["duration"] = fields["total_nights"]
+
         # hotel_type default
         if "hotel_type" not in fields or not fields["hotel_type"]:
             fields["hotel_type"] = "mid-range"
