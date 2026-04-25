@@ -1,0 +1,194 @@
+{
+  "info": {
+    "name": "Travel Itinerary Chatbot API",
+    "description": "Test collection for formal request parsing and chat endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Test Formal Request (Oman)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Dear Ms., Meghana,\\n \\nPlease find below the query for your kind reference:-\\n\\nDestination       :             Oman\\nCheck In            :             14th Jan 2026\\nCheck Out         :             19th Jan 2026\\nDuration             :             05N/06D\\nNo. of Pax          :             04 (Adults)\\nNo. of Rooms   :             02\\nHotel                  :             4* or similar\\n \\nNeed feasible Itinerary and leisure itinerary. We don't need hectic schedule.\\n \\nKinldy check if stay can be split between Muscat and some other place.\\nWe need Hotel Cost and Last cost separately. All Transfers & Sightseeing on Private Basis.\\n \\nLooking forward to your early response!!\"\n}\n"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/chat",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "chat"
+          ]
+        },
+        "description": "Test formal request parser with Oman travel query"
+      },
+      "response": []
+    },
+    {
+      "name": "Simple Chat Message",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"I want to travel to Dubai for 4 days with 2 pax. Budget is 50000 INR\"\n}\n"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/chat",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "chat"
+          ]
+        },
+        "description": "Test simple conversation flow"
+      },
+      "response": []
+    },
+    {
+      "name": "List Available Destinations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/itineraries/templates/destinations",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "itineraries",
+            "templates",
+            "destinations"
+          ]
+        },
+        "description": "Get list of available itinerary template destinations"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Dubai Itinerary Template",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/itineraries/templates/Dubai",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "itineraries",
+            "templates",
+            "Dubai"
+          ]
+        },
+        "description": "Get itinerary template for Dubai"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Client",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Acme Travels\",\n  \"email\": \"meghana@acmetravels.com\",\n  \"phone\": \"+91-9876543210\",\n  \"industry\": \"travel\",\n  \"org_level\": \"SMB\",\n  \"notes\": \"Corporate travel agency specializing in leisure tours\"\n}\n"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/clients",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "clients"
+          ]
+        },
+        "description": "Create a new client"
+      },
+      "response": []
+    },
+    {
+      "name": "List All Clients",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/clients",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "clients"
+          ]
+        },
+        "description": "Get all clients"
+      },
+      "response": []
+    },
+    {
+      "name": "Search Clients",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/api/clients/search?q=Acme",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "clients",
+            "search"
+          ],
+          "query": [
+            {
+              "key": "q",
+              "value": "Acme"
+            }
+          ]
+        },
+        "description": "Search clients by name, email, or industry"
+      },
+      "response": []
+    }
+  ]
+}

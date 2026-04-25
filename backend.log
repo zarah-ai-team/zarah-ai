@@ -1,0 +1,495 @@
+C:\Users\sachi\Downloads\Draft\Draft\.venv_new\Lib\site-packages\sklearn\base.py:463: InconsistentVersionWarning: Trying to unpickle estimator LinearRegression from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+C:\Users\sachi\Downloads\Draft\Draft\app.py:1739: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+  class ClientRequest(BaseModel):
+INFO:     Started server process [48280]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61849 - "GET /api/v2/itinerary/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51203 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60166 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55526 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55641 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58275 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55526 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60166 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50333 - "OPTIONS /api/chat HTTP/1.1" 200 OK
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T02:36:02.476551Z] Using client_type from session field: 'leisure'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T02:36:03.650773Z] Loaded 2 user KB documents for query='Departure leisure'
+INFO:     [2026-04-25T02:36:03.650844Z] Started attractions lookup for destination='Departure'
+INFO:     [2026-04-25T02:36:03.650869Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='Departure'
+INFO:     [2026-04-25T02:36:03.650888Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T02:36:03.650939Z] Computed price context from price engine for pax=4
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Departure&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22Departure%22%5D%3Bway%5B%22name%22~%22Departure%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:36:05.803951Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:36:05.804700Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T02:36:05.804780Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     127.0.0.1:54791 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     [2026-04-25T02:37:35.119520Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T02:37:35.119683Z] Stored raw LLM output in session
+INFO:     [2026-04-25T02:37:35.120025Z] Extracted JSON substring from LLM raw: found
+INFO:     [2026-04-25T02:37:35.120141Z] Parsed itinerary JSON successfully
+INFO:     [2026-04-25T02:37:35.120202Z] Attached 0 hotels to itinerary
+INFO:     127.0.0.1:50333 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50333 - "OPTIONS /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50333 - "PUT /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59526 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52208 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53402 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50857 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63680 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63680 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50857 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63680 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "OPTIONS /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63680 - "OPTIONS /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55584 - "GET /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63680 - "GET /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "PUT /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "OPTIONS /api/chats/038fd5ba-529a-4039-a7d7-04ba73ae81e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats/038fd5ba-529a-4039-a7d7-04ba73ae81e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats/038fd5ba-529a-4039-a7d7-04ba73ae81e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/chats/038fd5ba-529a-4039-a7d7-04ba73ae81e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55170 - "DELETE /api/chats/038fd5ba-529a-4039-a7d7-04ba73ae81e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "OPTIONS /api/chats/ece330de-5336-45e3-ad52-8c46c869f60f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "DELETE /api/chats/ece330de-5336-45e3-ad52-8c46c869f60f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "OPTIONS /api/chats/630b7ef2-c52e-4934-8672-1107f5c5ad06 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "DELETE /api/chats/630b7ef2-c52e-4934-8672-1107f5c5ad06 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "OPTIONS /api/chats/f24650d3-62ea-47f6-a8ce-21684841b69d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "DELETE /api/chats/f24650d3-62ea-47f6-a8ce-21684841b69d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "GET /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58605 - "GET /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54036 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54036 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58388 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52987 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58388 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52987 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58388 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52987 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51127 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64361 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61904 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52686 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61904 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52686 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61904 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52686 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "OPTIONS /api/chats/610c0352-0e1b-4113-ad6b-76c0f37f83d8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "OPTIONS /api/chats/610c0352-0e1b-4113-ad6b-76c0f37f83d8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "GET /api/chats/610c0352-0e1b-4113-ad6b-76c0f37f83d8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57324 - "GET /api/chats/610c0352-0e1b-4113-ad6b-76c0f37f83d8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57324 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62139 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54593 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54593 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54593 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63004 - "DELETE /api/chats/610c0352-0e1b-4113-ad6b-76c0f37f83d8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59090 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59090 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "OPTIONS /api/clients/client_1_1777074489 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "DELETE /api/clients/client_1_1777074489 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49777 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55699 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64312 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56866 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59826 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55699 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64312 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59703 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59703 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59703 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59703 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59703 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60706 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64346 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60706 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60706 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60706 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50563 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60706 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52271 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52271 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62623 - "OPTIONS /api/chat HTTP/1.1" 200 OK
+INFO:     [2026-04-25T02:51:14.936170Z] Using client_type from session field: 'corporate'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T02:51:14.939596Z] Loaded 2 user KB documents for query='phuket thailand arrival and departure included in those three days team building'
+INFO:     [2026-04-25T02:51:14.939691Z] Started attractions lookup for destination='phuket thailand arrival and departure included in those three days'
+INFO:     [2026-04-25T02:51:14.939742Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='phuket thailand arrival and departure included in those three days'
+INFO:     [2026-04-25T02:51:14.939786Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T02:51:14.939874Z] Computed price context from price engine for pax=3
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=phuket+thailand+arrival+and+departure+included+in+those+three+days&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22phuket+thailand+arrival+and+departure+included+in+those+three+days%22%5D%3Bway%5B%22name%22~%22phuket+thailand+arrival+and+departure+included+in+those+three+days%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22phuket+thailand+arrival+and+departure+included+in+those+three+days%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22phuket+thailand+arrival+and+departure+included+in+those+three+days%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:51:17.932416Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:51:17.933763Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T02:51:17.933923Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     [2026-04-25T02:52:32.513649Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T02:52:32.513805Z] Stored raw LLM output in session
+INFO:     [2026-04-25T02:52:32.514095Z] Extracted JSON substring from LLM raw: found
+INFO:     [2026-04-25T02:52:32.514198Z] Failed to parse extracted itinerary JSON: Expecting ',' delimiter: line 13 column 2 (char 236)
+INFO:     [2026-04-25T02:52:32.514276Z] Built enriched_hotels for fallback response: count=0
+INFO:     127.0.0.1:62623 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "OPTIONS /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "PUT /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "OPTIONS /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "GET /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60870 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     [2026-04-25T02:57:06.015491Z] Using client_type from session field: 'leisure'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T02:57:06.018411Z] Loaded 2 user KB documents for query='Departure leisure'
+INFO:     [2026-04-25T02:57:06.018499Z] Started attractions lookup for destination='Departure'
+INFO:     [2026-04-25T02:57:06.018547Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='Departure'
+INFO:     [2026-04-25T02:57:06.018583Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T02:57:06.018688Z] Computed price context from price engine for pax=4
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Departure&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22Departure%22%5D%3Bway%5B%22name%22~%22Departure%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:57:08.859056Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:57:08.860614Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T02:57:08.860761Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     127.0.0.1:50202 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59403 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59403 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59403 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59403 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59403 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64831 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55792 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     [2026-04-25T02:58:14.264201Z] Using client_type from session field: 'leisure'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T02:58:14.268510Z] Loaded 2 user KB documents for query='Departure leisure'
+INFO:     [2026-04-25T02:58:14.268652Z] Started attractions lookup for destination='Departure'
+INFO:     [2026-04-25T02:58:14.268719Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='Departure'
+INFO:     [2026-04-25T02:58:14.268776Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T02:58:14.268907Z] Computed price context from price engine for pax=4
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Departure&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22Departure%22%5D%3Bway%5B%22name%22~%22Departure%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:58:18.754450Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T02:58:18.756242Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T02:58:18.756396Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     [2026-04-25T02:58:43.852046Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T02:58:43.852276Z] Stored raw LLM output in session
+INFO:     [2026-04-25T02:58:43.852693Z] Extracted JSON substring from LLM raw: found
+INFO:     [2026-04-25T02:58:43.852851Z] Parsed itinerary JSON successfully
+INFO:     [2026-04-25T02:58:43.852933Z] Attached 0 hotels to itinerary
+INFO:     127.0.0.1:57497 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     [2026-04-25T02:59:01.453928Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T02:59:01.454125Z] Stored raw LLM output in session
+INFO:     [2026-04-25T02:59:01.454263Z] Extracted JSON substring from LLM raw: none
+INFO:     [2026-04-25T02:59:01.454327Z] Built enriched_hotels for fallback response: count=0
+INFO:     127.0.0.1:55792 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53323 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53323 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53323 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53323 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51202 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59918 - "OPTIONS /api/chats/7ab5d437-bfdf-4cf5-a64c-7a3451873319 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56345 - "OPTIONS /api/chats/7ab5d437-bfdf-4cf5-a64c-7a3451873319 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56345 - "GET /api/chats/7ab5d437-bfdf-4cf5-a64c-7a3451873319 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59918 - "GET /api/chats/7ab5d437-bfdf-4cf5-a64c-7a3451873319 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "OPTIONS /api/chats/36404bb5-3b70-4691-bce4-2695b5af6ad9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "DELETE /api/chats/36404bb5-3b70-4691-bce4-2695b5af6ad9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53499 - "DELETE /api/chats/7ab5d437-bfdf-4cf5-a64c-7a3451873319 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58201 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58201 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58201 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57266 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57266 - "GET /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57266 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58747 - "OPTIONS /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58747 - "GET /api/chats/4c257a88-eeac-40d8-a82a-094ea8a22b63 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53238 - "OPTIONS /api/chat HTTP/1.1" 200 OK
+INFO:     [2026-04-25T03:02:58.893968Z] Using client_type from session field: 'corporate'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T03:02:58.897031Z] Loaded 2 user KB documents for query='Abu Dhabi incentive'
+INFO:     [2026-04-25T03:02:58.897117Z] Started attractions lookup for destination='Abu Dhabi'
+INFO:     [2026-04-25T03:02:58.897165Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='Abu Dhabi'
+INFO:     [2026-04-25T03:02:58.897204Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T03:02:58.897283Z] Computed price context from price engine for pax=45
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Abu+Dhabi&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22Abu+Dhabi%22%5D%3Bway%5B%22name%22~%22Abu+Dhabi%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22Abu+Dhabi%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22Abu+Dhabi%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T03:03:01.811655Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T03:03:01.813000Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T03:03:01.813133Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     [2026-04-25T03:04:07.090975Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T03:04:07.091177Z] Stored raw LLM output in session
+INFO:     [2026-04-25T03:04:07.091458Z] Extracted JSON substring from LLM raw: none
+INFO:     [2026-04-25T03:04:07.091509Z] Built enriched_hotels for fallback response: count=0
+INFO:     127.0.0.1:53238 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61249 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61249 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49225 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61249 - "GET /api/chats HTTP/1.1" 200 OK
+Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Users\sachi\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sachi\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+INFO:     127.0.0.1:51198 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "OPTIONS /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "OPTIONS /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55837 - "GET /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "GET /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "OPTIONS /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "PUT /api/chats/63685a71-5a02-4300-b400-fc1e56720fdc/metadata HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "OPTIONS /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "OPTIONS /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/chats/00655c6f-16ea-4731-b8f9-0c56ecb973f6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63229 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52131 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     [2026-04-25T03:09:52.652921Z] Using client_type from session field: 'leisure'
+C:\Users\sachi\Downloads\Draft\Draft\app.py:251: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  ts = datetime.utcnow().isoformat() + "Z"
+INFO:     [2026-04-25T03:09:52.656201Z] Loaded 2 user KB documents for query='Departure leisure'
+INFO:     [2026-04-25T03:09:52.656294Z] Started attractions lookup for destination='Departure'
+INFO:     [2026-04-25T03:09:52.656345Z] Started real-time enrichment (Wikipedia/Attractions/News) for destination='Departure'
+INFO:     [2026-04-25T03:09:52.656388Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch
+INFO:     [2026-04-25T03:09:52.656497Z] Computed price context from price engine for pax=4
+Wikipedia search failed: 403 Client Error: Forbidden for url: https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=Departure&format=json&srlimit=3
+Attractions by name search failed: 406 Client Error: Not Acceptable for url: https://overpass-api.de/api/interpreter?data=%5Bbbox%3A-90%2C-180%2C90%2C180%5D%3B%28node%5B%22name%22~%22Departure%22%5D%3Bway%5B%22name%22~%22Departure%22%5D%3Bnode%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3Bway%5B%22tourism%22%5D%5B%22name%22~%22Departure%22%5D%3B%29%3Bout+center+10%3B
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T03:09:57.559438Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+Google search failed: No module named 'googlesearch'
+INFO:     [2026-04-25T03:09:57.560679Z] Injecting 2 KB document(s) into LLM prompt
+INFO:     [2026-04-25T03:09:57.560831Z] Calling LLM: model=llama3:8b, base_url=http://localhost:11434
+INFO:     [2026-04-25T03:11:25.124569Z] LLM ok; attractions: no; realtime: no
+INFO:     [2026-04-25T03:11:25.124769Z] Stored raw LLM output in session
+INFO:     [2026-04-25T03:11:25.125099Z] Extracted JSON substring from LLM raw: found
+INFO:     [2026-04-25T03:11:25.125197Z] Failed to parse extracted itinerary JSON: Expecting ',' delimiter: line 13 column 2 (char 233)
+INFO:     [2026-04-25T03:11:25.125277Z] Built enriched_hotels for fallback response: count=0
+INFO:     127.0.0.1:61219 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56330 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56324 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52024 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50557 - "OPTIONS /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54924 - "OPTIONS /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54924 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50557 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54924 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54924 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "OPTIONS /api/chats/a46575d0-2ac7-4888-9472-619292517a45 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "DELETE /api/chats/a46575d0-2ac7-4888-9472-619292517a45 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "OPTIONS /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "OPTIONS /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "GET /api/v2/documents/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "GET /api/v2/documents?page=1&page_size=10&kb_only=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58250 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59088 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51113 - "GET /api/clients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51113 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51113 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/chats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52271 - "GET /api/chats HTTP/1.1" 200 OK

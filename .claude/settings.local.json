@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(npx --version)",
+      "Bash(where npx *)",
+      "Bash(.venv/Scripts/python.exe *)",
+      "Bash(curl -s http://localhost:11434/api/tags)",
+      "Bash(curl *)",
+      "Bash(npm --version)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(.venv/Scripts/python.exe app.py)",
+      "Bash(echo \"Backend started with PID $!\")",
+      "Bash(.venv_new/Scripts/pip install *)",
+      "Bash(.venv_new/Scripts/python.exe app.py)",
+      "Bash(echo \"Backend PID: $!\")",
+      "PowerShell($response = [System.Net.WebClient]::new\\(\\); $response.DownloadString\\(\"http://localhost:8000\"\\))",
+      "PowerShell($response = [System.Net.WebClient]::new\\(\\); $response.DownloadString\\(\"http://localhost:3000\"\\) | Out-String | Select-Object -First 5)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell($response = [System.Net.WebClient]::new\\(\\); $response.DownloadString\\(\"http://localhost:8000/api/admin/itinerary-files\"\\))",
+      "Bash(python3 *)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(where python3 *)",
+      "Bash(where python *)",
+      "Read(//usr/**)",
+      "Bash(ls venv/)",
+      "Bash(ls .venv/)",
+      "Bash(venv/Scripts/python.exe -c ' *)",
+      "Bash(/c/Users/sachi/AppData/Local/Python/bin/python3.14-64.exe *)",
+      "PowerShell(& \"C:\\\\Users\\\\sachi\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -c \"import ast; ast.parse\\(open\\('C:/Users/sachi/Downloads/Draft/Draft/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\" 2>&1)",
+      "Bash(C:\\\\Users\\\\sachi\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe *)",
+      "Bash(npm start *)",
+      "mcp__ide__getDiagnostics"
+    ]
+  }
+}

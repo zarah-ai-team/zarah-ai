@@ -1,0 +1,42 @@
+[
+  {
+    "doc_id": "eb932b68-d7e",
+    "filename": "Oman in Regular I - FD .docx",
+    "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "size_bytes": 2850732,
+    "description": "",
+    "s3_key": "documents/eb932b68-d7e/Oman in Regular I - FD .docx",
+    "storage_uri": "file://data\\uploads\\documents\\eb932b68-d7e\\Oman in Regular I - FD .docx",
+    "download_url": "data\\uploads\\documents\\eb932b68-d7e\\Oman in Regular I - FD .docx",
+    "uploaded_at": "2026-04-24T23:49:13.087908Z",
+    "kb_status": "indexed",
+    "kb_char_count": 6997,
+    "kb_cities": [
+      "Muscat",
+      "Oman"
+    ],
+    "kb_has_pricing": true,
+    "kb_has_hotels": true,
+    "kb_processed_at": "2026-04-24T23:49:14.110958Z"
+  },
+  {
+    "doc_id": "2f425864-cd1",
+    "filename": "Salalah FIT - Tripindeal (Sep 2025).docx",
+    "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "size_bytes": 885146,
+    "description": "",
+    "s3_key": "documents/2f425864-cd1/Salalah FIT - Tripindeal (Sep 2025).docx",
+    "storage_uri": "file://data\\uploads\\documents\\2f425864-cd1\\Salalah FIT - Tripindeal (Sep 2025).docx",
+    "download_url": "data\\uploads\\documents\\2f425864-cd1\\Salalah FIT - Tripindeal (Sep 2025).docx",
+    "uploaded_at": "2026-04-25T00:23:53.770556Z",
+    "kb_status": "indexed",
+    "kb_char_count": 4494,
+    "kb_cities": [
+      "Muscat",
+      "Oman"
+    ],
+    "kb_has_pricing": true,
+    "kb_has_hotels": true,
+    "kb_processed_at": "2026-04-25T00:23:53.792596Z"
+  }
+]

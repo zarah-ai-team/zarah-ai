@@ -1,0 +1,298 @@
+[
+  {
+    "test_id": 1,
+    "test_name": "PowerShell Remote Execution with Obfuscation",
+    "threat_description": "Detect when PowerShell executes with obfuscated parameters, downloads files from the internet, and writes to suspicious locations.",
+    "mitre_techniques": [
+      "T1059",
+      "T1105",
+      "T1140",
+      "T1087"
+    ],
+    "sigma": {
+      "rule": "title: Detect when PowerShell executes with obfuscated parameters, downloads files\nid: 4e966c89-bc7c-4460-a85f-c2f758ae0b56\nstatus: experimental\nlogsource:\n  product: windows\n  service: powershell\ndetection:\n  powershell_execution:\n    Image|endswith: \\\\powershell.exe\n    CommandLine|contains:\n    - powershell\n    - ps.exe\n  network_activity:\n    CommandLine|contains|any:\n    - DownloadFile\n    - WebClient\n    - wget\n    - curl\n    - http\n    - ftp\n  obfuscation:\n    CommandLine|contains|any:\n    - EncodeCommand\n    - -NoP\n    - Replace\n    - SubString\n    - base64\n  file_write:\n    TargetFilename|endswith:\n    - .exe\n    - .dll\n    - .vbs\n    - .ps1\n    - .bat\n    - .cmd\n  condition: powershell_execution and network_activity\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1059\n- attack.t1105\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect when PowerShell executes with obf [T1059]\"; content:\"GET\"; http_method; content:\"http\"; http_uri; content:\"encoded\"; nocase; flow:to_server,established; sid:5027448; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "yara": {
+      "rule": "rule Detect_when_PowerShell_executes\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect when PowerShell executes with obfuscated pa\"\n    mitre_techniques = \"T1059, T1105\"\n  strings:\n    $ps1 = \"powershell\" nocase\n    $ps2 = \"cmd.exe\" nocase\n    $web1 = \"http\" nocase\n    $web2 = \"DownloadFile\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.8,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    }
+  },
+  {
+    "test_id": 2,
+    "test_name": "Registry Modification for Persistence",
+    "threat_description": "Detect registry modification attempts targeting Run keys and startup folders to establish persistence.",
+    "mitre_techniques": [
+      "T1547",
+      "T1112"
+    ],
+    "sigma": {
+      "rule": "title: Detect registry modification attempts targeting Run keys and startup folders\n  to\nid: a22fab21-9262-4a99-bdb9-9880809eb9a0\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  registry_mod:\n    TargetObject|contains|any:\n    - \\\\Software\\\\\n    - \\\\System\\\\\n  file_write:\n    TargetFilename|endswith:\n    - .exe\n    - .dll\n    - .vbs\n    - .ps1\n    - .bat\n    - .cmd\n  condition: registry_mod and file_write\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1547\n- attack.t1112\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect registry modification attempts ta [T1547]\"; sid:5091074; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.7,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    },
+    "yara": {
+      "rule": "rule Detect_registry_modification_attempts\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect registry modification attempts targeting Ru\"\n    mitre_techniques = \"T1547, T1112\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 3,
+    "test_name": "Lateral Movement via Remote Services",
+    "threat_description": "Detect lateral movement attempts using RDP and SMB connections to remote hosts.",
+    "mitre_techniques": [
+      "T1021"
+    ],
+    "sigma": {
+      "rule": "title: Detect lateral movement attempts using RDP and SMB connections to remote hosts\nid: bc38dd3b-84b4-4c97-bd1f-2701959a63ee\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  selection:\n    CommandLine|contains: Detect\n  condition: selection\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1021\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect lateral movement attempts using R [T1021]\"; sid:5016850; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.7,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    },
+    "yara": {
+      "rule": "rule Detect_lateral_movement_attempts\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect lateral movement attempts using RDP and SMB\"\n    mitre_techniques = \"T1021\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 4,
+    "test_name": "Data Exfiltration Over HTTPS",
+    "threat_description": "Detect suspicious outbound HTTPS connections to external command and control servers for data exfiltration.",
+    "mitre_techniques": [
+      "T1059",
+      "T1105",
+      "T1041"
+    ],
+    "sigma": {
+      "rule": "title: Detect suspicious outbound HTTPS connections to external command and control\nid: da5e4545-7b24-4710-810b-5033a541e632\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  network_activity:\n    CommandLine|contains|any:\n    - DownloadFile\n    - WebClient\n    - wget\n    - curl\n    - http\n    - ftp\n  condition: network_activity\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1059\n- attack.t1105\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect suspicious outbound HTTPS connect [T1059]\"; content:\"GET\"; http_method; content:\"http\"; http_uri; flow:to_server,established; sid:5071428; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "yara": {
+      "rule": "rule Detect_suspicious_outbound_HTTPS\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect suspicious outbound HTTPS connections to ex\"\n    mitre_techniques = \"T1059, T1105\"\n  strings:\n    $web1 = \"http\" nocase\n    $web2 = \"DownloadFile\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.8,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    }
+  },
+  {
+    "test_id": 5,
+    "test_name": "Malware Download and Execution",
+    "threat_description": "Detect downloads of executable files from suspicious URLs followed by execution.",
+    "mitre_techniques": [
+      "T1105",
+      "T1204"
+    ],
+    "sigma": {
+      "rule": "title: Detect downloads of executable files from suspicious URLs followed by execution\nid: e0270fa7-3f82-4c83-bc2d-816ac366340a\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  network_activity:\n    CommandLine|contains|any:\n    - DownloadFile\n    - WebClient\n    - wget\n    - curl\n    - http\n    - ftp\n  file_write:\n    TargetFilename|endswith:\n    - .exe\n    - .dll\n    - .vbs\n    - .ps1\n    - .bat\n    - .cmd\n  condition: network_activity and file_write\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1105\n- attack.t1204\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect downloads of executable files fro [T1105]\"; content:\"GET\"; http_method; content:\"http\"; http_uri; flow:to_server,established; sid:5057793; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "yara": {
+      "rule": "rule Detect_downloads_of_executable\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect downloads of executable files from suspicio\"\n    mitre_techniques = \"T1105, T1204\"\n  strings:\n    $web1 = \"http\" nocase\n    $web2 = \"DownloadFile\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.8,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    }
+  },
+  {
+    "test_id": 6,
+    "test_name": "Credential Dumping via LSASS",
+    "threat_description": "Detect attempts to access and dump credentials from LSASS memory.",
+    "mitre_techniques": [],
+    "sigma": {
+      "rule": "title: Detect attempts to access and dump credentials from LSASS memory\nid: 4bfe8f4f-7108-4daa-9559-1e4e50537f66\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  selection:\n    CommandLine|contains: Detect\n  condition: selection\ntags:\n- detection.threat_hunting\n- attack.execution\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detected: Detect attempts to access and dump crede\"; sid:5011741; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.7,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    },
+    "yara": {
+      "rule": "rule Detect_attempts_to_access\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect attempts to access and dump credentials fro\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 7,
+    "test_name": "Command Line Obfuscation Detection",
+    "threat_description": "Detect command-line encoding attacks using base64 and other obfuscation techniques.",
+    "mitre_techniques": [
+      "T1140",
+      "T1059",
+      "T1041"
+    ],
+    "sigma": {
+      "rule": "title: Detect command-line encoding attacks using base64 and other obfuscation\nid: 07333d19-6a29-4db6-8d00-9988c28c57b2\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  obfuscation:\n    CommandLine|contains|any:\n    - EncodeCommand\n    - -NoP\n    - Replace\n    - SubString\n    - base64\n  condition: obfuscation\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1140\n- attack.t1059\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect command-line encoding attacks usi [T1140]\"; content:\"encoded\"; nocase; flow:to_server,established; sid:5053683; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 1.0,
+      "confidence_level": "\ud83d\udfe2 Excellent (90%+)"
+    },
+    "yara": {
+      "rule": "rule Detect_commandline_encoding_attacks\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect command-line encoding attacks using base64 \"\n    mitre_techniques = \"T1140, T1059\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 8,
+    "test_name": "Suspicious Process Creation",
+    "threat_description": "Detect suspicious child processes spawned from unexpected parent processes.",
+    "mitre_techniques": [],
+    "sigma": {
+      "rule": "title: Detect suspicious child processes spawned from unexpected parent processes\nid: 0bbf2c2e-d0fa-40a9-a657-63705ed5822f\nstatus: experimental\nlogsource:\n  product: windows\n  service: process_creation\ndetection:\n  selection:\n    CommandLine|contains: Detect\n  condition: selection\ntags:\n- detection.threat_hunting\n- attack.execution\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detected: Detect suspicious child processes spawne\"; sid:5071161; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.7,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    },
+    "yara": {
+      "rule": "rule Detect_suspicious_child_processes\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect suspicious child processes spawned from une\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 9,
+    "test_name": "DNS Tunneling Detection",
+    "threat_description": "Detect potential DNS tunneling for command and control communication.",
+    "mitre_techniques": [
+      "T1059",
+      "T1041"
+    ],
+    "sigma": {
+      "rule": "title: Detect potential DNS tunneling for command and control communication\nid: bc26e5e6-80f0-40b8-aa76-f74015634b3e\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  selection:\n    CommandLine|contains: Detect\n  condition: selection\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1059\n- attack.t1041\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert udp any any -> any any (msg:\"Detect potential DNS tunneling for comma [T1059]\"; flow:to_server,established; sid:5079939; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "yara": {
+      "rule": "rule Detect_potential_DNS_tunneling\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect potential DNS tunneling for command and con\"\n    mitre_techniques = \"T1059, T1041\"\n  strings:\n    $generic = \"suspicious\" nocase\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  },
+  {
+    "test_id": 10,
+    "test_name": "File-less Malware Detection",
+    "threat_description": "Detect file-less malware that executes directly in memory without writing to disk.",
+    "mitre_techniques": [
+      "T1083"
+    ],
+    "sigma": {
+      "rule": "title: Detect file-less malware that executes directly in memory without writing to\nid: 0348e646-eb80-4102-aaab-bb59b40b3160\nstatus: experimental\nlogsource:\n  product: windows\n  service: sysmon\ndetection:\n  file_write:\n    TargetFilename|endswith:\n    - .exe\n    - .dll\n    - .vbs\n    - .ps1\n    - .bat\n    - .cmd\n  condition: file_write\ntags:\n- detection.threat_hunting\n- attack.execution\n- attack.t1083\nreferences:\n- https://github.com/SigmaHQ/sigma\n- https://attack.mitre.org\n",
+      "valid": true,
+      "validation_msg": "Valid Sigma rule",
+      "confidence_score": 0.85,
+      "confidence_level": "\ud83d\udfe2 High (75-90%)"
+    },
+    "snort": {
+      "rule": "alert tcp any any -> any any (msg:\"Detect file-less malware that executes d [T1083]\"; sid:5072248; rev:1;)",
+      "valid": false,
+      "validation_msg": "Rule must end with semicolon",
+      "confidence_score": 0.7,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    },
+    "yara": {
+      "rule": "rule Detect_fileless_malware_that\n{\n  meta:\n    author = \"Security Team\"\n    date = \"2025-12-15\"\n    description = \"Detect file-less malware that executes directly in\"\n    mitre_techniques = \"T1083\"\n  strings:\n    $mal1 = { 4D 5A 90 00 }\n  condition:\n    any of them\n}",
+      "valid": true,
+      "validation_msg": "Valid YARA rule",
+      "confidence_score": 0.65,
+      "confidence_level": "\ud83d\udfe1 Medium (60-75%)"
+    }
+  }
+]
