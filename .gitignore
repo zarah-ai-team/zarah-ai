@@ -1,0 +1,24 @@
+# Local env / logs
+main-frontend/client/.env.local
+main-frontend/client/.env.development.local
+main-frontend/client/.env.test.local
+main-frontend/client/.env.production.local
+main-frontend/client/frontend.log
+**/coverage/
+**/build/
+
+# Design references (local only)
+chat-figma-ref.png
+chat-header-figma.png
+chat-session-figma.png
+client-figma.png
+doc-list-figma.png
+doc-upload-figma.png
+itinerary-figma.png
+itinerary-table-figma.png
+toggle-figma.png
+topbar-figma.png
+
+# OS
+.DS_Store
+Thumbs.db

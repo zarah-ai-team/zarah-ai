@@ -1,0 +1,29 @@
+{
+  "session_id": "3bb76054-df13-4ab6-85a6-619f9ac4ceaf",
+  "username": "Sachin1",
+  "chat_name": "hi",
+  "name_auto": true,
+  "created_at": "2026-04-25T13:56:05.394576Z",
+  "updated_at": "2026-04-25T13:56:05.397469Z",
+  "metadata": {
+    "status": "draft"
+  },
+  "fields": {
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Where are we heading? Let me know the destination — a city, country, or multi-city route like Dubai → Abu Dhabi."
+    }
+  ],
+  "sanity_checks": [],
+  "last_llm_raw": null,
+  "last_llm_prompt": null
+}

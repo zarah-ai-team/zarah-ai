@@ -7,5 +7,14 @@
     "created_at": "2026-04-24T22:19:48.721347Z",
     "is_active": true,
     "is_admin": true
+  },
+  "Sachin1": {
+    "username": "Sachin1",
+    "email": "sachin@zarah.ai",
+    "full_name": "Sachin",
+    "hashed_password": "$2b$12$wIyn.0RQR5qJ2S9UGbJpP.14QkbA9T.uw.Xr9oVgUBkIbTEie3ccK",
+    "created_at": "2026-04-25T12:01:57.345099Z",
+    "is_active": true,
+    "is_admin": false
   }
 }
