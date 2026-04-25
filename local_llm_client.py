@@ -46,13 +46,13 @@ class LocalLLMClient:
             else:
                 model = os.getenv("OLLAMA_MODEL_PROD", os.getenv("OLLAMA_MODEL", "llama3"))
         try:
-            num_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "8000"))
+            num_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "16000"))
         except (ValueError, TypeError):
-            num_predict = 8000
+            num_predict = 16000
         try:
-            num_ctx = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+            num_ctx = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
         except (ValueError, TypeError):
-            num_ctx = 8192
+            num_ctx = 32768
 
         if _APP_ENV == "dev":
             return self._generate_native(system_prompt, messages, model, num_ctx, num_predict)
@@ -104,6 +104,8 @@ class LocalLLMClient:
             "messages": [{"role": "system", "content": system_prompt}] + messages,
             "temperature": 0.7,
             "max_tokens": num_predict,
+            # Ollama-specific: extend context window so long itineraries aren't truncated
+            "options": {"num_ctx": num_ctx, "num_predict": num_predict},
         }
         session = requests.Session()
         retries = Retry(total=2, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])

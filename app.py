@@ -21,6 +21,7 @@ from price_engine import PriceEngine
 from price_engine import EXCHANGE_RATES
 from wikipedia_lookup import get_top_attractions as get_attractions_for_destination
 from hotel_api_client import HotelAPIClient
+from real_time_search import get_travel_price_context
 import asyncio
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
@@ -827,6 +828,17 @@ async def chat(request: Request):
     realtime_task = asyncio.to_thread(llm.enrich_with_realtime_data, dest_for_lookup)
     sc(f"Started enrichment for destination(s)='{dest_for_lookup}'")
 
+    # Start real-time price context fetch in parallel (free APIs — EUR rate + hotel estimates)
+    _price_dests = _all_dests if _all_dests else ([fields["destination"]] if fields.get("destination") else [])
+    price_ctx_task = asyncio.to_thread(
+        get_travel_price_context,
+        _price_dests,
+        fields.get("hotel_category") or "4-Star",
+        fields.get("trip_start_date") or fields.get("checkin_date") or "",
+        int(fields.get("pax") or 2),
+        _nights_per_city,
+    ) if _price_dests else None
+
 
     # Prepare hotel prefetch task (best-effort) if destination info is present
     hotels_suggestions = []
@@ -1299,10 +1311,22 @@ async def chat(request: Request):
             enrich = {"city_summary": None, "attractions": attractions_raw or []}
 
         sc(f"Pre-gathered real-time data sanity: wiki={'yes' if realtime_data.get('wikipedia') else 'no'}; attractions={len(enrich.get('attractions', []))}; news={len(realtime_data.get('news', []))}")
+
+        # Await price context task (with timeout so it never blocks)
+        _live_price_ctx: Dict[str, Any] = {}
+        if price_ctx_task:
+            try:
+                _live_price_ctx = await asyncio.wait_for(price_ctx_task, timeout=8)
+                sc(f"Price context fetched: cities={list(_live_price_ctx.get('per_city', {}).keys())}")
+            except asyncio.TimeoutError:
+                sc("price_ctx_task timed out after 8s")
+            except Exception as _pe:
+                sc(f"price_ctx_task failed: {_pe}")
     except Exception as e:
         logger.error("Failed to pre-gather real-time data: %s", e)
         realtime_data = {"wikipedia": {}, "attractions": [], "news": []}
         enrich = {"city_summary": None, "attractions": []}
+        _live_price_ctx = {}
         sc(f"Real-time pre-gather failed: {e}")
 
     # Now enrich user_prompt with the actual real-time data we fetched
@@ -1461,11 +1485,42 @@ async def chat(request: Request):
         f"{_raw_request_text}\n\n"
     ) if _raw_request_text else ""
 
+    # Build live price context block from real-time search results
+    _live_price_block = ""
+    if _live_price_ctx and _live_price_ctx.get("per_city"):
+        _price_lines = ["REAL-TIME PRICE CONTEXT (use these figures for accurate cost estimation):"]
+        _eur_inr = _live_price_ctx.get("eur_to_inr", 90)
+        _price_lines.append(f"  EUR→INR rate: {_eur_inr:.1f}")
+        for _city, _cdata in _live_price_ctx["per_city"].items():
+            _ppn = _cdata.get("hotel_per_night_inr")
+            _htotal = _cdata.get("hotel_total_inr")
+            _nights_c = _cdata.get("nights", "?")
+            _rooms_c = _cdata.get("rooms_estimated", 1)
+            if _ppn:
+                _price_lines.append(f"  {_city}: hotel ~INR {_ppn:,}/night/room")
+            if _htotal:
+                _price_lines.append(f"    → Total hotel ({_nights_c}N × {_rooms_c} room(s)): INR {_htotal:,}")
+        _van_cost = _live_price_ctx.get("transport_per_day_inr")
+        _meal_cost = _live_price_ctx.get("meals_per_person_per_day_inr")
+        _sight_cost = _live_price_ctx.get("sightseeing_per_person_per_day_inr")
+        if _van_cost:
+            _price_lines.append(f"  Private van hire: ~INR {_van_cost:,}/day")
+        if _meal_cost:
+            _price_lines.append(f"  Meals per person/day: ~INR {_meal_cost:,}")
+        if _sight_cost:
+            _price_lines.append(f"  Sightseeing per person/day: ~INR {_sight_cost:,}")
+        _notes = _live_price_ctx.get("notes", [])
+        if _notes:
+            _price_lines.append(f"  Sources: {'; '.join(_notes[:3])}")
+        _price_lines.append("  NOTE: Use these INR figures in cost_breakdown; do NOT invent generic USD costs.")
+        _live_price_block = "\n".join(_price_lines) + "\n"
+
     if kb_summary:
         user_prompt = (
             f"{_client_type_line}"
             f"{_trip_details_block}"
             f"{_raw_request_block}"
+            f"{_live_price_block}"
             f"Predicted cost (total): ${predicted_cost:.2f} USD\n"
             f"Estimated costs (derived): {price_ctx}\n"
             f"Historical data (anonymized): {kb_summary}\n"
@@ -1480,6 +1535,7 @@ async def chat(request: Request):
             f"{_client_type_line}"
             f"{_trip_details_block}"
             f"{_raw_request_block}"
+            f"{_live_price_block}"
             f"Predicted cost (total): ${predicted_cost:.2f} USD\n"
             f"Estimated costs (derived): {price_ctx}\n"
             f"City summary (from Wikipedia): {enrich.get('city_summary', 'N/A')}\n"

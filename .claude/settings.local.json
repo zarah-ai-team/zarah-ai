@@ -30,7 +30,9 @@
       "PowerShell(& \"C:\\\\Users\\\\sachi\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -c \"import ast; ast.parse\\(open\\('C:/Users/sachi/Downloads/Draft/Draft/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\" 2>&1)",
       "Bash(C:\\\\Users\\\\sachi\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe *)",
       "Bash(npm start *)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
