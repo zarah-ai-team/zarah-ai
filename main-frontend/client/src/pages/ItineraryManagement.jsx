@@ -13,9 +13,10 @@ import {
   Trash2,
   Download,
   Eye,
+  FileText,
   X,
 } from "lucide-react";
-import { listChats, createChat, deleteChat, getChatSession, updateChatMetadata } from "../services/chatService";
+import { listChats, createChat, deleteChat, getChatSession, updateChatMetadata, listSavedItineraries, downloadItineraryDocx } from "../services/chatService";
 import ItineraryDisplay, { generateItineraryPDF } from "../components/chat/ItineraryDisplay";
 import PortalMenu from "../components/common/PortalMenu";
 
@@ -81,12 +82,14 @@ const STATUS_LABEL = {
   cancelled:    "Completed",
 };
 
-// Options shown in the dropdown — keys are what we send back to the backend.
+// Status chips. Text is forced near-black in BOTH light and dark mode so the
+// label is always readable against the brand-saturated backgrounds — the user
+// wants the chip to look the same regardless of theme.
 const STATUS_OPTIONS = [
-  { value: "saved",       label: "Saved",       color: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300" },
-  { value: "not_started", label: "Not Started", color: "bg-gray-100  text-gray-700  dark:bg-white/10 dark:text-gray-200" },
-  { value: "in_progress", label: "In Progress", color: "bg-blue-100  text-blue-800  dark:bg-blue-500/20 dark:text-blue-200" },
-  { value: "completed",   label: "Completed",   color: "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-200" },
+  { value: "saved",       label: "Saved",       color: "bg-amber-100 text-gray-900 ring-1 ring-amber-300/70 dark:bg-amber-200 dark:text-gray-900 dark:ring-amber-400/60" },
+  { value: "not_started", label: "Not Started", color: "bg-gray-200  text-gray-900 ring-1 ring-gray-300/70  dark:bg-gray-200  dark:text-gray-900 dark:ring-gray-400/60" },
+  { value: "in_progress", label: "In Progress", color: "bg-blue-100  text-gray-900 ring-1 ring-blue-300/70  dark:bg-blue-200  dark:text-gray-900 dark:ring-blue-400/60" },
+  { value: "completed",   label: "Completed",   color: "bg-green-100 text-gray-900 ring-1 ring-green-300/70 dark:bg-green-200 dark:text-gray-900 dark:ring-green-400/60" },
 ];
 
 const STATUS_KEY_BY_LABEL = Object.fromEntries(STATUS_OPTIONS.map((o) => [o.label, o.value]));
@@ -125,11 +128,33 @@ const ItineraryManagement = () => {
   const fetchSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listChats();
-      const list = Array.isArray(data) ? data : (data.chats ?? data.sessions ?? []);
-      // Only show chats whose itinerary the user has explicitly saved.
-      // Plain conversations stay in chat history and don't appear here.
-      const saved = list.filter((s) => s.has_saved_itinerary);
+      // Prefer the dedicated /api/itineraries endpoint (returns only saved
+      // itineraries with embedded JSON) — falls back to /api/chats with a
+      // client-side filter if the new endpoint isn't available.
+      let saved = [];
+      try {
+        const r = await listSavedItineraries();
+        const list = Array.isArray(r) ? r : (r.itineraries ?? []);
+        saved = list.map((it) => ({
+          session_id: it.session_id,
+          chat_name: it.name,
+          metadata: {
+            itinerary_name: it.name,
+            status: it.status,
+            travelers_max: it.pax,
+            duration: it.duration_days ? `${it.duration_days} days` : "",
+            travel_dates: it.travel_dates,
+            estimated_cost: it.estimated_cost,
+          },
+          has_saved_itinerary: true,
+          created_at: it.created_at,
+          updated_at: it.updated_at,
+        }));
+      } catch {
+        const data = await listChats();
+        const list = Array.isArray(data) ? data : (data.chats ?? data.sessions ?? []);
+        saved = list.filter((s) => s.has_saved_itinerary);
+      }
       setSessions(saved.map(normalizeSession));
     } catch {
       // keep previous list on error
@@ -138,7 +163,21 @@ const ItineraryManagement = () => {
     }
   }, []);
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  // Refetch on mount AND whenever this page becomes visible again (e.g. user
+  // navigates Chat → Itineraries after saving). Visibility refresh fixes the
+  // "I just saved but the list still shows the old data" issue.
+  useEffect(() => {
+    fetchSessions();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchSessions();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", fetchSessions);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", fetchSessions);
+    };
+  }, [fetchSessions]);
 
   const stats = useMemo(() => [
     { id: 1, label: "Total Itineraries", value: sessions.length, icon: "clipboard-list", bg: "#FFFAC5" },
@@ -229,26 +268,44 @@ const ItineraryManagement = () => {
     } catch {}
   };
 
+  const loadAndDownloadDocx = async (sessionId, suggestedName) => {
+    setMenuOpenId(null);
+    try {
+      await downloadItineraryDocx(sessionId, suggestedName || "itinerary");
+    } catch (e) {
+      alert("Could not download Word doc: " + (e.message || "Unknown error"));
+    }
+  };
+
   return (
     <div className="animate-fadeIn" onClick={() => setMenuOpenId(null)}>
 
-      {/* ── Itinerary viewer modal ── */}
+      {/* ── Itinerary viewer modal — wider, centered, scrollable; forced-light
+          inside so the saved itinerary card is always readable as black on white,
+          even when the rest of the app is in dark mode. ── */}
       {viewItinerary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">Saved Itinerary</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-gray-900/60 backdrop-blur-sm overflow-y-auto"
+          onClick={() => setViewItinerary(null)}
+        >
+          <div
+            className="itinerary-modal-light bg-white rounded-2xl shadow-[0_20px_60px_-12px_rgba(0,0,0,0.4)] w-full max-w-5xl max-h-[92vh] flex flex-col my-auto mx-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0 bg-white rounded-t-2xl">
+              <h3 className="text-base font-semibold text-gray-900">Saved Itinerary</h3>
               <button
                 onClick={() => setViewItinerary(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Close"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-6 py-5 bg-white rounded-b-2xl">
               {viewItinerary === "loading" || viewLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <RefreshCw size={20} className="animate-spin text-gray-400" />
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw size={22} className="animate-spin text-gray-400" />
                 </div>
               ) : (
                 <ItineraryDisplay

@@ -491,7 +491,14 @@ def match_transport_preference(text: str) -> Optional[str]:
 
 
 def match_vehicle_type(text: str) -> str:
+    """
+    Return a vehicle description based on what the user actually requested.
+    Only echoes a specific brand/model when the user explicitly named one;
+    otherwise returns a generic, destination-agnostic description so the LLM
+    is free to pick something locally appropriate.
+    """
     t = text.lower()
+    # Brand-specific matches ONLY trigger when the user typed the brand.
     if "viano" in t:
         return "Mercedes Viano or similar"
     if "sprinter" in t:
@@ -504,7 +511,21 @@ def match_vehicle_type(text: str) -> str:
         return "Toyota Fortuner or similar"
     if "tempo" in t or "traveller" in t:
         return "Tempo Traveller or similar"
-    return "Private van (Mercedes Viano class or equivalent)"
+    # Generic class hints
+    if "luxury" in t or "premium" in t:
+        return "Premium chauffeured vehicle"
+    if "coach" in t or "bus" in t:
+        return "Air-conditioned coach"
+    if "minivan" in t or "minibus" in t:
+        return "Minivan (locally available class)"
+    if "suv" in t:
+        return "Private SUV"
+    if "sedan" in t:
+        return "Private sedan"
+    if "car" in t or "taxi" in t:
+        return "Private car with driver"
+    # No specific request — let downstream pick. No hardcoded brand default.
+    return "Private vehicle (size and class chosen for the destination and pax)"
 
 
 # ── Constraints ────────────────────────────────────────────────────────────

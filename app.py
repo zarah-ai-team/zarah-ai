@@ -6,7 +6,7 @@ load_dotenv()  # Must be called before any os.getenv() in any module
 
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
 import uuid
 import logging
@@ -24,7 +24,7 @@ from wikipedia_lookup import get_top_attractions as get_attractions_for_destinat
 from hotel_api_client import HotelAPIClient
 from real_time_search import get_travel_price_context
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 
 from client_manager import (
@@ -159,6 +159,10 @@ def _get_missing_formal_fields(fields: dict) -> list:
         missing.append(("pax", "number of pax (travelers)"))
     if not (fields.get("total_nights") or fields.get("nights") or fields.get("nights_per_city")):
         missing.append(("total_nights", "trip duration (number of nights)"))
+    # Trip start date is REQUIRED so the LLM can use real future dates and
+    # live searches reflect the actual travel window.
+    if not (fields.get("trip_start_date") or fields.get("checkin_date")):
+        missing.append(("trip_start_date", "trip start date (e.g. '15 March 2026')"))
     return missing
 
 
@@ -183,8 +187,8 @@ def _build_formal_clarification(fields: dict, missing: list) -> str:
     )
 
     # Ask for ONE field at a time — pick by priority so the user never sees a
-    # multi-question wall. Order: destination first, then pax, then duration.
-    _PRIORITY = ["destination", "destinations", "pax", "total_nights", "nights"]
+    # multi-question wall. Order: destination → pax → duration → start date.
+    _PRIORITY = ["destination", "destinations", "pax", "total_nights", "nights", "trip_start_date"]
     first = None
     for key, label in missing:
         if key in _PRIORITY:
@@ -226,6 +230,150 @@ _CONFIRM_WORDS = {
     "approved", "approve", "continue", "start", "build", "done", "right",
     "that's right", "that's correct", "all good", "sounds good",
 }
+
+
+def _is_past_date(value) -> bool:
+    """True if value (ISO 'YYYY-MM-DD' or month-only) is strictly before today."""
+    if not value:
+        return False
+    s = str(value).strip()
+    today = datetime.utcnow().date()
+    # ISO date
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+    if m:
+        try:
+            d = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+            return d < today
+        except Exception:
+            return False
+    # "Month YYYY" — past only if year < current year, OR same year but month < current
+    _MONTHS = {
+        "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+        "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan":1,"feb":2,"mar":3,"apr":4,"jun":6,"jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12,
+    }
+    m2 = re.match(r"^([A-Za-z]+)\s+(\d{4})$", s)
+    if m2:
+        mo = _MONTHS.get(m2.group(1).lower())
+        try:
+            yr = int(m2.group(2))
+            if mo:
+                if yr < today.year:
+                    return True
+                if yr == today.year and mo < today.month:
+                    return True
+        except Exception:
+            return False
+    return False
+
+
+_PAST_DATE_REPLY = (
+    "Oops — that travel date is in the past, so I can't build an itinerary "
+    "around it. Could you share a future trip start date? "
+    "For example: \"15 June 2026\" or \"next month\"."
+)
+
+
+def _parse_user_date(text: str) -> Optional[str]:
+    """
+    Best-effort parse a user-supplied trip-start date into ISO 'YYYY-MM-DD'.
+    Recognises ISO, '15 March 2026', 'March 15 2026', 'March 2026' (1st of month),
+    'next month' (1st of next month), 'tomorrow', 'next week'. Returns None on
+    failure so the caller can ask again.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    t = text.strip().lower()
+    today = datetime.utcnow().date()
+
+    # Quick keywords
+    if t in ("today",):
+        return today.isoformat()
+    if t in ("tomorrow",):
+        return (today + timedelta(days=1)).isoformat()
+    if "next week" in t:
+        return (today + timedelta(days=7)).isoformat()
+    if "next month" in t:
+        from calendar import monthrange
+        y = today.year + (1 if today.month == 12 else 0)
+        m = 1 if today.month == 12 else today.month + 1
+        # mid/start/end modifier
+        if "mid" in t or "middle" in t:
+            return datetime(y, m, max(1, monthrange(y, m)[1] // 2)).date().isoformat()
+        if "end" in t or "last" in t:
+            return datetime(y, m, monthrange(y, m)[1]).date().isoformat()
+        return datetime(y, m, 1).date().isoformat()
+
+    # ISO YYYY-MM-DD
+    m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", text)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date().isoformat()
+        except Exception:
+            pass
+
+    # DD/MM/YYYY or MM/DD/YYYY (assume DD/MM if first part > 12)
+    m = re.search(r"\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})\b", text)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            if a > 12:
+                return datetime(y, b, a).date().isoformat()
+            return datetime(y, a, b).date().isoformat()  # MM/DD/YYYY default
+        except Exception:
+            pass
+
+    # "15 March 2026" / "March 15 2026" / "March 2026"
+    _MONTHS = {
+        "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+        "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+        "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+    }
+    m = re.search(
+        r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s*,?\s*(\d{4})?\b", text,
+    )
+    if m:
+        try:
+            d = int(m.group(1))
+            mo = _MONTHS.get(m.group(2).lower())
+            y = int(m.group(3) or today.year)
+            if mo:
+                # If year missing and the date is past, roll to next year
+                cand = datetime(y, mo, d).date()
+                if cand < today and not m.group(3):
+                    cand = datetime(y + 1, mo, d).date()
+                return cand.isoformat()
+        except Exception:
+            pass
+    m = re.search(
+        r"\b([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{4})?\b", text,
+    )
+    if m:
+        try:
+            mo = _MONTHS.get(m.group(1).lower())
+            d = int(m.group(2))
+            y = int(m.group(3) or today.year)
+            if mo:
+                cand = datetime(y, mo, d).date()
+                if cand < today and not m.group(3):
+                    cand = datetime(y + 1, mo, d).date()
+                return cand.isoformat()
+        except Exception:
+            pass
+
+    # "March 2026" → 1st of that month
+    m = re.search(r"\b([A-Za-z]+)\s+(\d{4})\b", text)
+    if m:
+        try:
+            mo = _MONTHS.get(m.group(1).lower())
+            y = int(m.group(2))
+            if mo:
+                return datetime(y, mo, 1).date().isoformat()
+        except Exception:
+            pass
+
+    return None
 _CONFIRM_PHRASES = [
     "go ahead", "looks good", "all good", "let's go", "lets go", "that's right",
     "that's correct", "yes please", "yes proceed", "yes go", "confirm and generate",
@@ -553,6 +701,99 @@ async def chat(request: Request):
     # Append message to history
     session["history"].append({"role": "user", "content": req.message})
 
+    # ── Fast Ollama availability gate ──────────────────────────────────────
+    # Skip the heavy pipeline (and the early LangChain extraction below) if
+    # Ollama isn't reachable. Without this, the frontend would sit on the
+    # loading pipeline for the full LOCAL_LLM_TIMEOUT (15 minutes) before
+    # discovering the backend can't talk to the model. 2s health check is fast
+    # enough to feel instantaneous and reliable on localhost.
+    try:
+        _llm_alive = await asyncio.wait_for(
+            asyncio.to_thread(llm.is_available, 2.0),
+            timeout=3.0,
+        )
+    except Exception:
+        _llm_alive = False
+    if not _llm_alive:
+        sc("Ollama health check failed — refusing to call LLM")
+        _err = (
+            "I can't reach the LLM service right now. Please make sure Ollama is "
+            "running (run `ollama serve` and `ollama list` to confirm the model is "
+            "pulled), then try again."
+        )
+        session["history"].append({"role": "assistant", "content": _err})
+        _sync_chat_to_store()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ollama_unavailable",
+                "message": _err,
+                "session_id": sid,
+            },
+        )
+
+    # ── Early LLM extraction (fires on every non-trivial message) ──────────
+    # Runs before any pipeline / formal-request branching so the LangChain
+    # extractor's structured output (destination, duration, pax, event_type,
+    # special requirements, AND the LLM-planned web search queries) is
+    # available throughout the rest of the request. Skipped on tiny messages
+    # ("hi", "yes", numeric replies) where regex/DB are equivalent and faster.
+    try:
+        if (
+            len(req.message.split()) >= 4
+            and not session.get("_skip_early_llm")
+            and "_langchain_extract" in dir()
+        ):
+            pass  # placeholder; the actual call happens via conv_manager
+    except Exception:
+        pass
+
+    try:
+        from langchain_field_extractor import extract_fields as _early_lc_extract
+        if len(req.message.split()) >= 4:
+            _lc = await asyncio.wait_for(
+                asyncio.to_thread(_early_lc_extract, req.message),
+                timeout=25,
+            )
+            if isinstance(_lc, dict) and _lc:
+                _fields = session.setdefault("fields", {})
+                # Merge LLM-extracted fields without clobbering values the user
+                # has already locked in (e.g. via confirmation card).
+                for k, v in _lc.items():
+                    if v in (None, "", []):
+                        continue
+                    if k == "search_queries":
+                        # Stash LLM-planned web searches on session.fields so the
+                        # Tavily step picks them up later in the same request.
+                        existing = list(_fields.get("llm_search_queries") or [])
+                        for q in v:
+                            if isinstance(q, str) and q.strip() and q not in existing:
+                                existing.append(q.strip())
+                        _fields["llm_search_queries"] = existing[:6]
+                        continue
+                    if k == "must_visit_landmarks":
+                        existing = list(_fields.get("preferred_activities") or [])
+                        for a in v:
+                            if isinstance(a, str) and a.strip() and a not in existing:
+                                existing.append(a.strip())
+                        if existing:
+                            _fields["preferred_activities"] = existing
+                        continue
+                    if k == "special_requirements":
+                        _fields.setdefault("special_requirements", v)
+                        continue
+                    if _fields.get(k) in (None, "", []):
+                        _fields[k] = v
+                sc(
+                    "Early LLM extraction merged: "
+                    + ", ".join(f"{k}={_lc.get(k)}" for k in ("destination","duration","pax","event_type") if _lc.get(k))
+                    + (f" + {len(_lc.get('search_queries') or [])} planned queries" if _lc.get("search_queries") else "")
+                )
+    except asyncio.TimeoutError:
+        sc("Early LLM extraction timed out (25s) — falling back to regex/DB")
+    except Exception as _eex:
+        logger.debug("Early LLM extraction skipped: %s", _eex)
+
     # ===== CONVERSATIONAL MODE =====
     # Only run the heavyweight itinerary-generation pipeline when the user clearly
     # asks for one. Otherwise reply conversationally so the bot feels human and
@@ -560,10 +801,25 @@ async def chat(request: Request):
     # LLM build. A simple regex catches "generate / create / build / make / plan
     # /generate the / draft an itinerary".
     _GENERATE_INTENT_RE = re.compile(
-        r"\b(?:generate|create|build|make|prepare|draft|design|put\s+together|plan|give\s+me|i\s+want|i\s+need)\b"
-        r"[^\.\?\!]{0,80}?\b(?:itinerary|trip\s+plan|schedule|day-?by-?day|day\s*plan)\b",
+        r"\b(?:generate|create|build|make|prepare|draft|design|put\s+together|plan|"
+        r"organi[sz]e|arrange|book|quote|give\s+me|i\s+(?:want|need|would\s+like)|"
+        r"can\s+you\s+(?:make|create|plan|build))\b"
+        r"[^\.\?\!]{0,100}?"
+        r"\b(?:itinerary|trip\s+plan|schedule|day-?by-?day|day\s*plan|"
+        r"tour|holiday|vacation|getaway|travel\s+plan|package|programme|program)\b",
         re.IGNORECASE,
     )
+    # Implicit generate-intent: a single message that already contains a destination
+    # AND a duration AND pax (i.e. a fully-formed brief like "Singapore 5N 4 pax
+    # leisure") should also kick off generation, even without a verb.
+    def _looks_like_complete_brief(text: str) -> bool:
+        t = text.lower()
+        has_dest = bool(re.search(
+            r"\b(to|in|at|for)\s+[A-Z]?[a-z]{2,}", text
+        )) or bool(re.search(r"^\s*[A-Z][a-zA-Z]+(?:\s*[→>,/]\s*[A-Z][a-zA-Z]+)+", text))
+        has_duration = bool(re.search(r"\b\d{1,2}\s*[-]?\s*(?:n(?:ights?)?|d(?:ays?)?)\b|\b\d{1,2}n[/\\\-]\d{1,2}d\b|\b\d{1,2}d[/\\\-]\d{1,2}n\b", t))
+        has_pax = bool(re.search(r"\b\d{1,3}\s*(?:pax|people|adults?|travell?ers?|members?)\b|family\s+of\s+\d+|group\s+of\s+\d+|couple\b", t))
+        return sum([has_dest, has_duration, has_pax]) >= 2
     # When the session already has a generated itinerary, follow-up messages
     # like "make it cheaper", "add a beach day", "change the hotel" are edit
     # requests — we send the existing itinerary + the new ask back to the LLM.
@@ -578,7 +834,11 @@ async def chat(request: Request):
         _has_existing_itinerary and bool(_IMPROVE_INTENT_RE.search(req.message))
         and not _GENERATE_INTENT_RE.search(req.message)
     )
-    _user_asked_to_generate = bool(_GENERATE_INTENT_RE.search(req.message)) or _user_wants_improvement
+    _user_asked_to_generate = (
+        bool(_GENERATE_INTENT_RE.search(req.message))
+        or _user_wants_improvement
+        or _looks_like_complete_brief(req.message)
+    )
     # Also treat formal/structured requests (Route:, City: N Nights, etc.) as
     # implicit generate intent — those are already DMC-style itinerary briefs.
     if not _user_asked_to_generate and is_formal_request(req.message):
@@ -741,8 +1001,35 @@ async def chat(request: Request):
                 _words = _stripped.split()
                 if 1 <= len(_words) <= 4 and not re.search(r"\d", _stripped) and len(_stripped) <= 40:
                     session.setdefault("fields", {})["destination"] = _stripped.strip(",.!?")
+            elif _missing_now == "trip_start_date":
+                # Parse the user's reply as a date. Try ISO first, then natural
+                # language ("15 March 2026", "March 2026", "next month").
+                _parsed_date = _parse_user_date(req.message)
+                if _parsed_date:
+                    if _is_past_date(_parsed_date):
+                        session["history"].append({"role": "assistant", "content": _PAST_DATE_REPLY})
+                        _sync_chat_to_store()
+                        return {"session_id": sid, "reply": _PAST_DATE_REPLY, "conversational": True}
+                    session.setdefault("fields", {})["trip_start_date"] = _parsed_date
+                    session["fields"].setdefault("checkin_date", _parsed_date)
         except Exception:
             pass
+
+        # ── Past-date guard ─────────────────────────────────────────────────
+        # LangChain or regex extraction may have populated trip_start_date /
+        # checkin_date from a past phrase (e.g. user said "Goa trip in
+        # December 2024"). Catch those and ask the user to choose a future
+        # date instead of silently building a backdated itinerary.
+        _f = session.get("fields", {})
+        for _k in ("trip_start_date", "checkin_date"):
+            _v = _f.get(_k)
+            if _v and _is_past_date(_v):
+                # Strip the bad value so the bot re-asks naturally
+                _f.pop("trip_start_date", None)
+                _f.pop("checkin_date", None)
+                session["history"].append({"role": "assistant", "content": _PAST_DATE_REPLY})
+                _sync_chat_to_store()
+                return {"session_id": sid, "reply": _PAST_DATE_REPLY, "conversational": True}
 
         # Re-evaluate after merges
         _missing = conv_manager.next_missing_field(session.get("fields", {}))
@@ -1048,6 +1335,24 @@ async def chat(request: Request):
                 budget_pp = fields["budget_per_person"]
         except Exception:
             pass
+
+    # ── Past-date guard before generation ──────────────────────────────────
+    # Final defence — even if an earlier path missed it, we never run the heavy
+    # itinerary pipeline against a backdated trip.
+    for _dk in ("trip_start_date", "checkin_date"):
+        _dv = fields.get(_dk)
+        if _dv and _is_past_date(_dv):
+            sc(f"Past trip date detected ({_dk}={_dv}); rejecting before generation")
+            fields.pop("trip_start_date", None)
+            fields.pop("checkin_date", None)
+            session["history"].append({"role": "assistant", "content": _PAST_DATE_REPLY})
+            _sync_chat_to_store()
+            return {
+                "session_id": sid,
+                "need_more": True,
+                "prompt": _PAST_DATE_REPLY,
+                "collected": fields,
+            }
 
     # ── Destination sanity check ────────────────────────────────────────────────
     # Catches both kinds of bad data:
@@ -1457,6 +1762,42 @@ async def chat(request: Request):
                 _day_ptr = _end + 1
         _day_range_str = "; ".join(_range_parts)
 
+    # Build a per-day date table anchored to the user-supplied trip start so the
+    # LLM can populate the "date" field for each day with REAL future dates.
+    _per_day_dates: List[str] = []
+    _trip_start_iso = ""
+    try:
+        _start_raw = fields.get("trip_start_date") or fields.get("checkin_date") or ""
+        # Accept either ISO or any prose; defer to _parse_user_date for prose.
+        _parsed_start = None
+        if isinstance(_start_raw, str) and re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", _start_raw.strip()):
+            try:
+                _parsed_start = datetime.strptime(_start_raw.strip(), "%Y-%m-%d").date()
+            except Exception:
+                _parsed_start = None
+        if _parsed_start is None and _start_raw:
+            _maybe = _parse_user_date(str(_start_raw))
+            if _maybe:
+                try:
+                    _parsed_start = datetime.strptime(_maybe, "%Y-%m-%d").date()
+                except Exception:
+                    pass
+        if _parsed_start and _num_days:
+            _trip_start_iso = _parsed_start.isoformat()
+            for _i in range(_num_days):
+                _d = _parsed_start + timedelta(days=_i)
+                _per_day_dates.append(_d.strftime("%a, %d %b %Y"))   # e.g. "Sat, 15 Mar 2026"
+    except Exception:
+        _per_day_dates = []
+    _date_table_str = ""
+    if _per_day_dates:
+        _date_table_str = (
+            "- REAL DATES (use these EXACTLY as the 'date' for each day; do NOT pick "
+            "your own dates):\n"
+            + "\n".join(f"    Day {i+1}: {d}" for i, d in enumerate(_per_day_dates))
+            + "\n"
+        )
+
     _multi_dest_rule = (
         f"- This is a MULTI-DESTINATION trip: {_route_str}.\n"
         f"- Nights per city: "
@@ -1490,6 +1831,91 @@ async def chat(request: Request):
             + ". Reflect this in hotel costs.\n"
         )
 
+    # ── Currency selection ─────────────────────────────────────────────────
+    # Pick the currency the LLM should quote everything in. Order of priority:
+    #   1. Explicit user-provided budget_currency
+    #   2. Country-of-destination heuristic (UAE/Oman → AED, Eurozone → EUR,
+    #      UK → GBP, India → INR, USA → USD)
+    #   3. INR default (most users are Indian agencies)
+    _country_currency_map = {
+        "AE": "AED", "OM": "AED", "QA": "AED", "BH": "AED", "SA": "AED", "KW": "AED",
+        "US": "USD", "CA": "USD",
+        "GB": "GBP",
+        "IN": "INR", "LK": "INR", "NP": "INR", "BT": "INR",
+        "JP": "USD", "TH": "USD", "ID": "USD", "MY": "USD", "SG": "USD", "VN": "USD",
+        "CN": "USD", "KR": "USD", "PH": "USD",
+        # Eurozone
+        "FR": "EUR", "DE": "EUR", "IT": "EUR", "ES": "EUR", "PT": "EUR",
+        "NL": "EUR", "BE": "EUR", "AT": "EUR", "GR": "EUR", "IE": "EUR", "FI": "EUR",
+    }
+    _currency_code = (fields.get("budget_currency") or "").upper().strip()
+    if _currency_code not in {"INR", "USD", "EUR", "GBP", "AED"}:
+        _currency_code = ""
+    if not _currency_code:
+        try:
+            from destination_resolver import find_destinations as _find_dests
+            _resolved = _find_dests(
+                str(fields.get("destination") or "")
+                + " " + " ".join(fields.get("destinations") or [])
+            ) or []
+            for _r in _resolved:
+                cc = (_r.get("country_code") or "").upper()
+                if cc in _country_currency_map:
+                    _currency_code = _country_currency_map[cc]
+                    break
+        except Exception:
+            pass
+    if not _currency_code:
+        _currency_code = "INR"
+    _currency_label = {
+        "INR": "Indian Rupees",
+        "USD": "US Dollars",
+        "EUR": "Euros",
+        "GBP": "British Pounds",
+        "AED": "UAE Dirhams",
+    }.get(_currency_code, _currency_code)
+    _currency_round = {
+        "INR": "nearest 500",
+        "USD": "nearest 5",
+        "EUR": "nearest 5",
+        "GBP": "nearest 5",
+        "AED": "nearest 25",
+    }.get(_currency_code, "nearest sensible unit")
+    fields["effective_currency"] = _currency_code
+
+    # ── Pax-aware transport sizing rule ───────────────────────────────────
+    _pax_int = int(fields.get("pax") or 2)
+    if _pax_int <= 3:
+        _transport_sizing_rule = (
+            "Choose a private SEDAN or premium chauffeured car (3 pax max). "
+            "A standard car is the right vehicle here — do NOT scale up to a coach."
+        )
+    elif _pax_int <= 6:
+        _transport_sizing_rule = (
+            "Choose a private SUV or MPV (e.g. 6-7 seater). A regular car is too small. "
+            "Avoid coaches — over-scaling wastes the client's budget."
+        )
+    elif _pax_int <= 10:
+        _transport_sizing_rule = (
+            "Choose a MINIVAN / passenger van (10-12 seater) — a regular car or SUV "
+            "cannot fit this group. Do NOT use a sedan or SUV here."
+        )
+    elif _pax_int <= 18:
+        _transport_sizing_rule = (
+            "Choose a MINI-COACH or 14-18 seater bus — a minivan is too tight, "
+            "a full coach is over-spec. Quote per day in local rates."
+        )
+    elif _pax_int <= 30:
+        _transport_sizing_rule = (
+            "Choose a STANDARD COACH (25-30 seater air-conditioned). A minivan or "
+            "SUV is wholly inadequate at this group size."
+        )
+    else:
+        _transport_sizing_rule = (
+            f"Choose a LARGE COACH or multiple coaches as appropriate for {_pax_int} pax. "
+            "Provide per-coach hire rate AND total. Cars/vans/SUVs are not viable."
+        )
+
     system_prompt = (
         "You are a senior travel consultant at a professional DMC/MICE agency. "
         "Produce a COMPLETE, DETAILED, PROFESSIONAL day-by-day itinerary based on the trip details provided.\n\n"
@@ -1507,7 +1933,7 @@ async def chat(request: Request):
         '    {\n'
         '      "day": <number>,\n'
         '      "city": "City name for this day",\n'
-        '      "date": "DD Mon YYYY",\n'
+        '      "date": "Day name, DD Mon YYYY (e.g. \\"Sat, 15 Mar 2026\\") — use the date TABLE provided in the user prompt; never make up dates",\n'
         '      "summary": "One-line evocative theme for the day (e.g. \'Ancient temples, spice markets & sunset dhow cruise\')",\n'
         '      "morning": "07:30 – Breakfast at [specific hotel restaurant or local café] ([cuisine], approx INR [X]/person). 09:00 – Depart hotel by private [vehicle type] (approx [X] min drive). 09:30 – Arrive at [Landmark/Venue]; guided tour covering [specific features, historical context]; entry fee INR [X]/person; approx [X] hrs. 11:30 – Walk to [next venue or market]; highlights include [specific stalls/items/sights]. 12:30 – Lunch at [Restaurant Name], [locality]; signature dishes: [dish1, dish2]; approx INR [X]/person.",\n'
         '      "afternoon": "14:00 – Transfer to [Venue/Area] (approx [X] min). 14:30 – [Activity at Venue]; entry INR [X]; duration approx [X] hrs; [specific things to see/do]. 16:30 – [Next activity or leisure time — specific venue, what to look for]. 17:30 – Return transfer to hotel; freshen up.",\n'
@@ -1537,11 +1963,12 @@ async def chat(request: Request):
         "STRICT RULES:\n"
         + (f"- CRITICAL: Generate EXACTLY {_num_days} day objects in the 'days' array. Set duration_days={_num_days}. Do NOT generate fewer or more days under any circumstances.\n" if _num_days else "")
         + "- itinerary_summary MUST be a 4-6 sentence narrative paragraph capturing the trip's character (kind of trip) and the experience the traveller will have at this destination. Do NOT skip this field, do NOT leave it empty, do NOT replace it with a list.\n"
-        + "- morning, afternoon, and evening MUST each be a full multi-sentence paragraph with: exact timings (HH:MM format), real venue/restaurant names, INR entry costs, travel durations, and at least 2-3 distinct activities per period.\n"
+        + f"- morning, afternoon, and evening MUST each be a full multi-sentence paragraph with: exact timings (HH:MM format), real venue/restaurant names, {_currency_code} entry costs, travel durations, and at least 2-3 distinct activities per period.\n"
         "- Do NOT use vague filler like 'visit a local market' — name the actual market, what is sold there, and the cost.\n"
-        "- Every meal must name the specific restaurant and 1-2 signature dishes with approximate per-person cost in INR.\n"
-        "- transport_note MUST appear on every day with the specific vehicle type and INR daily cost.\n"
-        "- All monetary values must be in INR. Round to nearest 500.\n"
+        + f"- Every meal must name the specific restaurant and 1-2 signature dishes with approximate per-person cost in {_currency_code}.\n"
+        + f"- transport_note MUST appear on every day with the specific vehicle type and {_currency_code} daily cost.\n"
+        + f"- All monetary values must be in {_currency_code} ({_currency_label}). Round to {_currency_round}.\n"
+        + f"- PAX-AWARE TRANSPORT (group size = {_pax_int}). {_transport_sizing_rule} The transport_note for every day must reflect this vehicle class. Use real, currently-available local operators when known; if not, describe the vehicle class and a realistic daily rate based on the live price context provided in the user prompt.\n"
         "- cost_breakdown must cover ALL days and ALL pax combined.\n"
         + _multi_dest_rule
         + _senior_rule
@@ -1622,6 +2049,13 @@ async def chat(request: Request):
         user_prompt += f"\n\nOriginal client request (read for any additional context or specific requests):\n{_raw_req}"
     if _num_days:
         user_prompt += f"\n\nCRITICAL REQUIREMENT: Generate EXACTLY {_num_days} day objects (one per day, {_total_nights_int} nights). Do NOT stop early."
+    if _date_table_str:
+        user_prompt += (
+            "\n\nDATES — assign these EXACT real dates to each day's 'date' field. "
+            "Do NOT use yesterday or backdated values; do NOT invent your own dates. "
+            "These are the actual future travel dates:\n"
+            + _date_table_str
+        )
     user_prompt += "\n\nReturn a single valid JSON object matching the schema in the system prompt. Output JSON only — no prose, no markdown fences."
     # We will NOT return raw match lists in the API response — the LLM can use the knowledge quietly.
     include_matches_in_response = False
@@ -1733,11 +2167,18 @@ async def chat(request: Request):
         _pax_hint = fields.get("pax") or 2
         _hotel_cat = fields.get("hotel_category") or "4-star"
 
+        # LLM-planned search queries — populated by the early LangChain extraction
+        # step. Each query was proposed by the model based on the user's exact
+        # request, so they're more relevant than generic "{city} attractions".
+        _llm_search_queries: list = list(fields.get("llm_search_queries") or [])
+        if _llm_search_queries:
+            sc(f"Using {len(_llm_search_queries)} LLM-planned search queries")
+
         if _search_cities:
             async def _tavily_city(city: str) -> str:
                 try:
                     _cli = await asyncio.wait_for(get_mcp_client(), timeout=10)
-                    # 3 queries per city: attractions, prices (always), local dining (if KB empty)
+                    # Standard 3 queries per city: attractions, prices, dining.
                     _q_attr = f"top tourist attractions things to do {city} travel itinerary tips"
                     _q_price = (
                         f"{_hotel_cat} hotel price per night {city} {_trip_when} "
@@ -1747,10 +2188,22 @@ async def chat(request: Request):
 
                     _r_attr = await asyncio.wait_for(_cli.search_web(_q_attr, depth="basic"), timeout=12)
                     _r_price = await asyncio.wait_for(_cli.search_web(_q_price, depth="basic"), timeout=12)
-                    # Only run dining query when KB is empty (save time otherwise)
                     _r_dining = ""
                     if not _has_kb:
                         _r_dining = await asyncio.wait_for(_cli.search_web(_q_dining, depth="basic"), timeout=12)
+
+                    # LLM-planned queries: scope each to this city only if it
+                    # doesn't already mention a city, so the result is relevant.
+                    _r_llm_blocks = []
+                    for _llm_q in _llm_search_queries[:3]:    # cap at 3 to keep costs sane
+                        try:
+                            scoped = _llm_q if city.lower() in _llm_q.lower() else f"{_llm_q} {city}"
+                            _r = await asyncio.wait_for(_cli.search_web(scoped, depth="basic"), timeout=12)
+                            if _r:
+                                _r_llm_blocks.append(f"Q: {scoped}\n{_r[:600]}")
+                        except Exception:
+                            continue
+
                     parts = []
                     if _r_attr:
                         parts.append(f"Attractions & Activities:\n{_r_attr[:700]}")
@@ -1758,6 +2211,8 @@ async def chat(request: Request):
                         parts.append(f"Live Prices & Costs:\n{_r_price[:800]}")
                     if _r_dining:
                         parts.append(f"Dining & Local Experiences:\n{_r_dining[:500]}")
+                    if _r_llm_blocks:
+                        parts.append("LLM-targeted research:\n" + "\n\n".join(_r_llm_blocks))
                     return f"[{city}]\n" + "\n".join(parts) if parts else ""
                 except asyncio.TimeoutError:
                     sc(f"Tavily: timeout for {city}")
@@ -2414,6 +2869,13 @@ async def api_update_chat_metadata(session_id: str, req: UpdateChatMetadataReque
                 pass
         if not meta_updates.get("duration") and itin.get("duration_days"):
             meta_updates["duration"] = f"{itin['duration_days']} days"
+        # Pull the group-total cost into metadata.estimated_cost so the
+        # itinerary list shows a real number instead of "—".
+        if not meta_updates.get("estimated_cost"):
+            cb = itin.get("cost_breakdown") or {}
+            grand = cb.get("grand_total_group") or cb.get("grand_total_per_person") or itin.get("total_cost")
+            if grand:
+                meta_updates["estimated_cost"] = str(grand)
 
     updates = {}
     if meta_updates:
@@ -2424,7 +2886,36 @@ async def api_update_chat_metadata(session_id: str, req: UpdateChatMetadataReque
     if req.saved_itinerary is not None:
         updates["saved_itinerary"] = req.saved_itinerary
     updated = update_chat(username, session_id, updates)
+    # Mirror saved itineraries into the KB corpus.
+    if req.saved_itinerary is not None:
+        try:
+            _persist_saved_itinerary_to_kb(
+                session_id, req.saved_itinerary,
+                meta_updates.get("itinerary_name") or req.chat_name,
+            )
+        except Exception as _ke:
+            logger.warning("KB mirror of saved itinerary failed: %s", _ke)
     return {"success": True, "metadata": updated.get("metadata", {})}
+
+
+def _persist_saved_itinerary_to_kb(session_id: str, itinerary: dict, name: Optional[str]) -> None:
+    """Write a saved itinerary to data/itineraries/saved/ AND immediately
+    reload the KB doc index so the next chat request can use this itinerary
+    as retrieval context — the model 'learns' from saved trips in real time
+    without requiring a backend restart."""
+    if not isinstance(itinerary, dict):
+        return
+    saved_dir = pathlib.Path("data") / "itineraries" / "saved"
+    saved_dir.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", (name or "itinerary"))[:60].strip("_") or "itinerary"
+    out_path = saved_dir / f"{session_id}-{slug}.json"
+    out_path.write_text(json.dumps(itinerary, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Hot-reload the KB doc index so the new itinerary is searchable instantly.
+    try:
+        from src.services.kb.kb_loader import get_kb_loader
+        get_kb_loader().reload_docs()
+    except Exception as _ke:
+        logger.debug("KB hot-reload after save failed (non-fatal): %s", _ke)
 
 
 @app.delete("/api/chats/{session_id}", tags=["Chats"])
@@ -2437,6 +2928,33 @@ async def api_delete_chat(session_id: str, current_user: dict = Depends(get_curr
     # Also remove from in-memory
     SESSIONS.pop(session_id, None)
     return {"success": True, "message": "Chat deleted"}
+
+
+@app.delete("/api/chats", tags=["Chats"])
+async def api_clear_all_chats(
+    keep_saved: bool = True,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Clear ALL chat history for the current user.
+    - keep_saved=true (default): retains chats that have a saved itinerary so
+      Itinerary Management isn't wiped accidentally.
+    - keep_saved=false: wipes everything, including saved itineraries.
+    """
+    username = current_user["username"]
+    chats = list_user_chats(username)
+    deleted, kept = 0, 0
+    for c in chats:
+        sid = c.get("session_id")
+        if not sid:
+            continue
+        if keep_saved and c.get("has_saved_itinerary"):
+            kept += 1
+            continue
+        if delete_chat_session(username, sid):
+            deleted += 1
+            SESSIONS.pop(sid, None)
+    return {"success": True, "deleted": deleted, "kept_saved": kept}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2915,6 +3433,273 @@ async def link_itinerary_to_client(client_id: str, itinerary_id: str):
     except Exception as e:
         logger.error(f"Itinerary linking failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class SaveItineraryRequest(BaseModel):
+    session_id: Optional[str] = None
+    itinerary: dict
+    name: Optional[str] = None
+    status: Optional[str] = "saved"
+
+
+@app.post("/api/itineraries", tags=["Itineraries"])
+async def api_save_itinerary(req: SaveItineraryRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Save an itinerary against a chat session. Creates the chat record if no
+    session_id is provided. Returns the session_id and the saved itinerary so
+    the frontend can immediately list it under /api/itineraries.
+    """
+    username = current_user["username"]
+    sid = req.session_id
+    if not sid:
+        sid = str(uuid.uuid4())
+        upsert_chat(username, sid, {
+            "chat_name": req.name or req.itinerary.get("title") or "Itinerary",
+            "fields": {},
+            "history": [],
+        })
+    name = (
+        req.name
+        or req.itinerary.get("title")
+        or (f"{req.itinerary['destination']} Trip" if req.itinerary.get("destination") else None)
+        or "Itinerary"
+    )
+    cb = req.itinerary.get("cost_breakdown") or {}
+    grand_total = (
+        cb.get("grand_total_group")
+        or cb.get("grand_total_per_person")
+        or req.itinerary.get("total_cost")
+    )
+    meta = {
+        "itinerary_name": name,
+        "status": req.status or "saved",
+    }
+    if grand_total:
+        meta["estimated_cost"] = str(grand_total)
+    if req.itinerary.get("pax"):
+        try:
+            meta["travelers_max"] = int(req.itinerary["pax"])
+        except (ValueError, TypeError):
+            pass
+    if req.itinerary.get("duration_days"):
+        meta["duration"] = f"{req.itinerary['duration_days']} days"
+    if req.itinerary.get("trip_start_date"):
+        meta["travel_dates"] = str(req.itinerary["trip_start_date"])
+    updates = {
+        "saved_itinerary": req.itinerary,
+        "metadata": meta,
+    }
+    if name:
+        updates["chat_name"] = name
+    chat = update_chat(username, sid, updates)
+    # Mirror the saved itinerary into data/itineraries/saved/<sid>.json so the
+    # KB loader picks it up the next time it runs — letting future trips
+    # benefit from this user's accumulated itinerary corpus.
+    try:
+        _persist_saved_itinerary_to_kb(sid, req.itinerary, name)
+    except Exception as _ke:
+        logger.warning("KB mirror of saved itinerary failed: %s", _ke)
+    return {
+        "session_id": sid,
+        "saved": True,
+        "itinerary_name": name,
+        "itinerary": req.itinerary,
+        "chat": chat,
+    }
+
+
+@app.get("/api/itineraries/{session_id}/download", tags=["Itineraries"])
+async def api_download_itinerary_doc(
+    session_id: str,
+    format: str = "docx",
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the saved itinerary as a downloadable Word (.docx) document."""
+    username = current_user["username"]
+    chat = get_chat(username, session_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    itinerary = chat.get("saved_itinerary")
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="No saved itinerary on this session")
+    if format.lower() not in ("docx", "doc"):
+        raise HTTPException(status_code=400, detail="Only docx is supported via this endpoint")
+
+    try:
+        from docx import Document
+        from docx.shared import Pt, RGBColor, Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"python-docx not available: {e}")
+
+    doc = Document()
+
+    # ── Title ─────────────────────────────────────────────────────────────
+    title_text = (
+        itinerary.get("title")
+        or (f"{itinerary['destination']} Trip" if itinerary.get("destination") else "Itinerary")
+    )
+    h = doc.add_heading(title_text, level=0)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # ── Metadata block ────────────────────────────────────────────────────
+    meta_p = doc.add_paragraph()
+    meta_bits = []
+    if itinerary.get("destination"):    meta_bits.append(f"Destination: {itinerary['destination']}")
+    if itinerary.get("duration_days"):  meta_bits.append(f"Duration: {itinerary['duration_days']} days")
+    if itinerary.get("pax"):            meta_bits.append(f"Pax: {itinerary['pax']}")
+    if itinerary.get("event_type"):     meta_bits.append(f"Trip type: {itinerary['event_type']}")
+    if itinerary.get("trip_start_date"): meta_bits.append(f"Start: {itinerary['trip_start_date']}")
+    meta_p.add_run("  •  ".join(meta_bits)).italic = True
+
+    # ── Summary ───────────────────────────────────────────────────────────
+    summary = itinerary.get("itinerary_summary") or itinerary.get("overview")
+    if summary:
+        doc.add_heading("Itinerary Summary", level=1)
+        doc.add_paragraph(summary)
+
+    # ── Day-by-day ────────────────────────────────────────────────────────
+    days = itinerary.get("days") or []
+    if days:
+        doc.add_heading("Day-by-day plan", level=1)
+        for d in days:
+            if not isinstance(d, dict):
+                continue
+            day_no = d.get("day", "")
+            date_str = d.get("date", "")
+            city = d.get("city", "")
+            day_summary = d.get("summary", "")
+            head = f"Day {day_no}"
+            if date_str: head += f" — {date_str}"
+            if city:     head += f" ({city})"
+            doc.add_heading(head, level=2)
+            if day_summary:
+                p = doc.add_paragraph()
+                p.add_run(day_summary).italic = True
+
+            for label_key in (("Morning", "morning"), ("Afternoon", "afternoon"), ("Evening", "evening")):
+                label, key = label_key
+                content = d.get(key)
+                if not content:
+                    continue
+                p = doc.add_paragraph()
+                run = p.add_run(f"{label}: ")
+                run.bold = True
+                p.add_run(str(content))
+
+            if d.get("transport_note"):
+                p = doc.add_paragraph()
+                run = p.add_run("Transport: ")
+                run.bold = True
+                p.add_run(str(d["transport_note"]))
+
+            hotel = d.get("hotel") or {}
+            if hotel.get("name"):
+                p = doc.add_paragraph()
+                run = p.add_run("Hotel: ")
+                run.bold = True
+                p.add_run(
+                    f"{hotel.get('name','')} ({hotel.get('category','')}) — {hotel.get('area','')}"
+                )
+
+    # ── Hotels list ───────────────────────────────────────────────────────
+    hotels = itinerary.get("hotels") or []
+    if hotels:
+        doc.add_heading("Hotels", level=1)
+        for h in hotels:
+            if isinstance(h, dict):
+                doc.add_paragraph(
+                    f"{h.get('city','')}: {h.get('name','')} ({h.get('category','')}) — "
+                    f"{h.get('price_per_night_inr','')} per night",
+                    style="List Bullet",
+                )
+
+    # ── Cost breakdown ────────────────────────────────────────────────────
+    cb = itinerary.get("cost_breakdown") or {}
+    if cb:
+        doc.add_heading("Cost breakdown", level=1)
+        for k, v in cb.items():
+            if v in (None, "", []):
+                continue
+            p = doc.add_paragraph(style="List Bullet")
+            run = p.add_run(f"{k.replace('_', ' ').title()}: ")
+            run.bold = True
+            p.add_run(str(v))
+
+    # ── Inclusions / Exclusions / Guidelines ──────────────────────────────
+    for heading, key in (
+        ("Inclusions", "inclusions"),
+        ("Exclusions", "exclusions"),
+        ("Important guidelines", "important_guidelines"),
+    ):
+        items = itinerary.get(key) or []
+        if items:
+            doc.add_heading(heading, level=1)
+            for it in items:
+                doc.add_paragraph(str(it), style="List Bullet")
+
+    # ── Notes ─────────────────────────────────────────────────────────────
+    if itinerary.get("notes"):
+        doc.add_heading("Notes", level=1)
+        doc.add_paragraph(str(itinerary["notes"]))
+
+    # Stream the file back
+    import io
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", title_text)[:60].strip("_") or "itinerary"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}.docx"',
+    }
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers,
+    )
+
+
+@app.get("/api/itineraries", tags=["Itineraries"])
+async def api_list_itineraries(current_user: dict = Depends(get_current_user)):
+    """
+    List every saved itinerary for the current user — flat shape with the
+    embedded itinerary JSON included so the frontend can render previews
+    without a second fetch per row.
+    """
+    username = current_user["username"]
+    chats = list_user_chats(username)
+    saved = [c for c in chats if c.get("has_saved_itinerary")]
+    out = []
+    for c in saved:
+        full = get_chat(username, c["session_id"]) or {}
+        meta = full.get("metadata", {}) or {}
+        itin = full.get("saved_itinerary") or {}
+        cb = (itin.get("cost_breakdown") or {}) if isinstance(itin, dict) else {}
+        # Prefer the explicit metadata.estimated_cost; fall back to the saved
+        # itinerary's grand_total_group → grand_total_per_person → total_cost
+        # so itineraries saved before the cost-mapping was added still display.
+        cost = (
+            meta.get("estimated_cost")
+            or cb.get("grand_total_group")
+            or cb.get("grand_total_per_person")
+            or itin.get("total_cost")
+            or ""
+        )
+        out.append({
+            "session_id": c["session_id"],
+            "name": meta.get("itinerary_name") or c.get("chat_name") or "Itinerary",
+            "status": meta.get("status") or "saved",
+            "destination": itin.get("destination"),
+            "duration_days": itin.get("duration_days"),
+            "pax": itin.get("pax"),
+            "travel_dates": meta.get("travel_dates") or itin.get("trip_start_date") or "",
+            "estimated_cost": str(cost) if cost else "",
+            "itinerary": itin or None,
+            "created_at": c.get("created_at"),
+            "updated_at": c.get("updated_at"),
+        })
+    out.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return {"itineraries": out, "count": len(out)}
 
 
 @app.get("/api/itineraries/templates/destinations")

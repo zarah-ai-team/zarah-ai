@@ -1,0 +1,86 @@
+{
+  "title": "Luxury Anniversary Getaway to Singapore",
+  "destination": "Singapore",
+  "duration_days": 4,
+  "pax": 4,
+  "event_type": "leisure",
+  "itinerary_summary": "Embark on a luxurious 4-day anniversary getaway to Singapore, where you'll experience the perfect blend of relaxation and excitement. Enjoy stunning city views from the Marina Bay Sands SkyPark, explore the vibrant streets of Marina, and discover the natural beauty of Gardens by the Bay. With a private SUV at your disposal, you'll have ample time to indulge in fine dining, take leisurely strolls along the waterfront, and soak up the vibrant atmosphere of this cosmopolitan city.",
+  "days": [
+    {
+      "day": 1,
+      "city": "Singapore",
+      "date": "15 Mar 2026",
+      "summary": "Arrival in Singapore & Marina Bay Sands SkyPark",
+      "morning": "08:00 – Breakfast at The Flying Pan (INR 2,200 per person), a trendy café serving up delicious eggs and coffee. 09:30 – Check-in at the PARKROYAL COLLECTION Marina Bay, Singapore (INR 20,000 per night). 10:30 – Visit the Marina Bay Sands SkyPark Observation Deck (INR 23 per person) for panoramic views of the city.",
+      "afternoon": "13:00 – Lunch at Shoukouwa (INR 2,500 per person), a Japanese restaurant with stunning harbor views. 15:00 – Take a leisurely stroll around Marina Bay and enjoy the scenic views. 17:30 – Return to your hotel for some relaxation time.",
+      "evening": "20:00 – Dinner at CUT by Wolfgang Puck (INR 5,000 per person), an upscale steakhouse with exceptional service. 22:00 – Enjoy a romantic evening stroll around Marina Bay.",
+      "transport_note": "Private Toyota Innova available for the entire day (INR 19,500)"
+    },
+    {
+      "day": 2,
+      "city": "Marina",
+      "date": "16 Mar 2026",
+      "summary": "Explore Marina & Gardens by the Bay",
+      "morning": "08:00 – Breakfast at The Coffee Academics (INR 1,800 per person), a cozy café serving specialty coffee and pastries. 09:30 – Visit Gardens by the Bay (INR 29 per person) for a unique botanical experience.",
+      "afternoon": "13:00 – Lunch at Raffles Café (INR 2,000 per person), a charming café with a relaxed atmosphere. 15:00 – Explore the Marina area and visit the nearby shopping centers.",
+      "evening": "19:30 – Dinner at Jamie's Italian (INR 3,500 per person), a modern Italian restaurant with fresh pasta dishes. 21:00 – Enjoy a leisurely walk around Marina Bay.",
+      "transport_note": "Private Toyota Innova available for the entire day (INR 19,500)"
+    },
+    {
+      "day": 3,
+      "city": "Bay",
+      "date": "17 Mar 2026",
+      "summary": "Day trip to Universal Studios Singapore",
+      "morning": "08:00 – Breakfast at Food for Thought (INR 2,000 per person), a popular café serving healthy breakfast options. 09:30 – Visit Universal Studios Singapore (INR 1,200 per person) for a fun-filled day of theme park excitement.",
+      "afternoon": "13:00 – Lunch at Hollywood & Dine (INR 2,500 per person), a themed restaurant with movie-inspired dishes. 15:00 – Continue exploring the theme park and enjoy the various attractions.",
+      "evening": "19:30 – Dinner at The Kitchen Table (INR 3,000 per person), a farm-to-table restaurant with seasonal produce. 21:00 – Return to your hotel for some relaxation time.",
+      "transport_note": "Private Toyota Innova available for the entire day (INR 19,500)"
+    },
+    {
+      "day": 4,
+      "city": "Star",
+      "date": "18 Mar 2026",
+      "summary": "Night Safari at Singapore Zoo",
+      "morning": "08:00 – Breakfast at The Daily Grind (INR 1,800 per person), a popular café serving coffee and breakfast items. 09:30 – Visit the Singapore Zoo (INR 15 per person) for a morning of wildlife exploration.",
+      "afternoon": "13:00 – Lunch at Forest Lodge Restaurant (INR 2,000 per person), a rustic restaurant with a focus on local ingredients. 15:00 – Continue exploring the zoo and its various attractions.",
+      "evening": "20:30 – Night Safari at Singapore Zoo (INR 35 per person) for an unforgettable evening of animal encounters in a naturalistic environment. 22:30 – Return to your hotel for some well-deserved rest.",
+      "transport_note": "Private Toyota Innova available for the entire day (INR 19,500)"
+    }
+  ],
+  "hotels": [
+    {
+      "city": "Singapore",
+      "name": "PARKROYAL COLLECTION Marina Bay, Singapore",
+      "area": "Marina Centre",
+      "category": "4-Star",
+      "price_per_night_inr": "20,000"
+    }
+  ],
+  "cost_breakdown": {
+    "accommodation": "INR 80,000 (4 nights @ INR 20,000 per night)",
+    "transport": "INR 77,000 (3 days @ INR 19,500 per day)",
+    "meals": "INR 24,000 (approx. INR 6,000 per person per day for 4 days)",
+    "sightseeing_and_activities": "INR 12,000 (various attraction fees and guided tours)",
+    "guide_fees": "INR 5,000",
+    "miscellaneous": "INR 2,000 (souvenirs, tips, etc.)",
+    "grand_total_per_person": "INR 85,000",
+    "grand_total_group": "INR 340,000"
+  },
+  "inclusions": [
+    "Accommodation at PARKROYAL COLLECTION Marina Bay, Singapore",
+    "Private Toyota Innova for transfers and excursions"
+  ],
+  "exclusions": [
+    "International/domestic airfare",
+    "Visa fees",
+    "Travel insurance",
+    "Meals not mentioned",
+    "Personal expenses",
+    "Tips and gratuities"
+  ],
+  "important_guidelines": [
+    "Carry valid passport/ID at all times",
+    "Respect local customs and traditions"
+  ],
+  "notes": "Please check-in at the hotel by 14:00 on the day of arrival to ensure a smooth check-in process."
+}

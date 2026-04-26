@@ -15,26 +15,30 @@ from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-# These tokens are NEVER destinations, even if they collide with city/town names
-# in the database (e.g. "Industry" is a town in California, "Plan" is a village
-# in Spain, "Retreat" is a town in Jamaica). Without this list, queries like
-# "Plan a trip" or "Estimate the cost" extract nonsense destinations.
+# Minimal blocklist — only words that are so common they collide every time
+# AND are clearly never the user's intended destination. The country-anchor
+# filter in find_destinations() handles the rest of the false-positive cleanup
+# without needing a giant whitelist/blocklist of city names.
 _HARD_BLOCKLIST: Set[str] = {
-    # Common ambiguous DB-collision city names
-    "industry", "victory", "service", "average", "summary", "review",
-    "retreat", "plan", "estimate", "request", "client", "guest", "person",
-    "people", "group", "family", "couple", "trip", "tour", "travel",
-    "journey", "route", "include", "exclude", "happy", "lovely", "luxury",
-    "deluxe", "premium", "deals", "deal", "offer", "of", "and", "or",
-    # English verbs + adjectives that double as obscure city names in the DB
-    "going", "gone", "going", "coming", "headed", "heading",
-    "fly", "flying", "drive", "driving", "walk", "walking",
-    "long", "short", "big", "small", "quick", "fast", "slow",
-    "solo", "alone", "together", "couple", "single",
-    "year", "month", "week", "day", "hour", "minute", "second",
-    # Pronouns / short fillers (DB also has these as obscure towns)
+    # Pronouns / fillers — collide via tiny villages in the DB
     "us", "we", "our", "ours", "they", "them", "their", "theirs",
     "him", "her", "his", "hers", "it", "its", "you", "your", "yours",
+    "the", "a", "an", "for", "with", "from", "of", "and", "or",
+    # Verbs at sentence start that often capitalize as "Plan", "Estimate"
+    "plan", "estimate", "summarize", "calculate", "review", "build",
+    "make", "create", "generate", "prepare", "draft", "design", "include",
+    "exclude", "send", "give", "share", "show", "tell",
+    # Motion / travel verbs that double as obscure village names
+    "going", "gone", "coming", "headed", "heading", "fly", "flying",
+    "drive", "driving", "walk", "walking", "ride", "riding",
+    # Generic travel nouns / fillers that the DB also stores as small villages
+    "trip", "tour", "travel", "journey", "route", "destination",
+    "hotel", "flight", "taxi", "vehicle", "bus", "train",
+    "breakfast", "lunch", "dinner", "meal",
+    "night", "day", "week", "month", "year",
+    # Months — collide with cities like "March", "May", "August"
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
     # Time / date tokens
     "morning", "afternoon", "evening", "night", "today", "tomorrow",
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
@@ -80,6 +84,63 @@ _ALIASES: Dict[str, str] = {
 }
 
 
+# Major travel cities curated from the country-state-city package — used to
+# allow short single-word capital/iconic destinations like "Tokyo", "Paris",
+# "Dubai" that would otherwise be filtered out by the noise rules. Lowercase.
+_MAJOR_SINGLE_WORD_CITIES: Set[str] = {
+    # Asia
+    "tokyo", "kyoto", "osaka", "seoul", "busan", "beijing", "shanghai",
+    "bangkok", "phuket", "krabi", "singapore", "manila", "hanoi", "bali",
+    "jakarta", "kathmandu", "thimphu", "colombo", "male", "maldives",
+    # India
+    "mumbai", "delhi", "bangalore", "chennai", "kolkata", "hyderabad",
+    "pune", "jaipur", "udaipur", "agra", "varanasi", "amritsar", "shimla",
+    "goa", "kochi", "munnar", "darjeeling", "leh",
+    # Middle East
+    "dubai", "doha", "muscat", "riyadh", "jeddah", "amman", "petra",
+    "beirut", "cairo", "luxor", "istanbul", "ankara",
+    # Europe
+    "london", "paris", "rome", "venice", "florence", "milan", "naples",
+    "madrid", "barcelona", "seville", "lisbon", "porto", "amsterdam",
+    "berlin", "munich", "hamburg", "vienna", "salzburg", "zurich", "geneva",
+    "bern", "interlaken", "prague", "budapest", "warsaw", "krakow",
+    "athens", "santorini", "mykonos", "stockholm", "copenhagen", "oslo",
+    "helsinki", "reykjavik", "moscow", "edinburgh", "glasgow", "dublin",
+    # Americas
+    "chicago", "miami", "boston", "seattle", "toronto", "vancouver",
+    "montreal", "havana", "rio", "lima", "cusco", "quito",
+    # Africa & Oceania
+    "marrakech", "casablanca", "fes", "nairobi", "zanzibar",
+    "sydney", "melbourne", "brisbane", "perth", "auckland", "queenstown",
+}
+
+# Words that look like single-word English nouns and are NEVER acceptable as a
+# destination even if some obscure village happens to share the name.
+_COMMON_ENGLISH_NOUNS: Set[str] = {
+    "tower", "bridge", "abbey", "church", "cathedral", "temple", "mosque",
+    "shrine", "monument", "statue", "fountain", "gate", "wall", "fort",
+    "castle", "palace", "park", "garden", "square", "plaza", "circle",
+    "street", "avenue", "lane", "road", "highway", "boulevard", "drive",
+    "thames", "ben", "eye", "wheel", "arena", "stadium", "court", "field",
+    "beach", "coast", "shore", "harbour", "harbor", "port", "dock", "pier",
+    "lake", "river", "valley", "hill", "mountain", "peak", "ridge", "cliff",
+    "forest", "wood", "park", "reserve",
+    "tea", "coffee", "wine", "beer", "lunch", "dinner", "brunch",
+    "free", "time", "early", "late", "morning", "afternoon", "evening",
+    "date", "day", "night", "week", "weekend",
+    "city", "town", "village", "centre", "center", "downtown", "old",
+    "new", "north", "south", "east", "west", "central", "upper", "lower",
+    "high", "low", "big", "small", "long", "short", "wide", "narrow",
+    "hard", "soft", "fast", "slow", "quick", "easy",
+    "gala", "show", "concert", "festival", "fair", "market",
+    "bar", "pub", "club", "lounge", "rooftop", "cafe", "restaurant",
+    "hotel", "flight", "taxi", "train", "metro", "bus", "boat", "ferry",
+    "cruise",
+    # Common short tokens that mis-match
+    "hi", "ok", "okay", "yes", "no", "via", "and", "or", "the",
+}
+
+
 @lru_cache(maxsize=1)
 def _build_index() -> Tuple[Dict[str, dict], Set[str]]:
     """Build a single lowercase → record index for cities + countries.
@@ -89,7 +150,7 @@ def _build_index() -> Tuple[Dict[str, dict], Set[str]]:
       {"name": "Singapore", "kind": "country", "country_code": "SG"}
     """
     index: Dict[str, dict] = {}
-    blocked: Set[str] = set(_HARD_BLOCKLIST)
+    blocked: Set[str] = set(_HARD_BLOCKLIST) | _COMMON_ENGLISH_NOUNS
     try:
         from country_state_city import City, Country, State
     except Exception as e:
@@ -126,13 +187,25 @@ def _build_index() -> Tuple[Dict[str, dict], Set[str]]:
         for name in names_to_add:
             _add(name.lower(), {"name": name, "kind": "city", "country_code": s.country_code})
 
-    # Cities — many duplicates across countries; keep the FIRST occurrence so
-    # well-known names like "Paris" → Paris, France, not Paris, Texas.
+    # Cities — strict filter:
+    #   - Multi-word names (e.g. "New York", "Loch Lomond") accepted
+    #   - Single-word names accepted ONLY if length ≥ 5 AND in our curated
+    #     major-cities list, OR length ≥ 6 (longer single-word cities are
+    #     usually real destinations, not common English words).
+    # This filters out the ~140k tiny villages with names like "Tower", "Bridge",
+    # "Ben", "Tea" that pollute itinerary parsing.
     for city in City.get_cities():
         name = (city.name or "").strip()
         if not name or len(name) < 3:
             continue
-        _add(name.lower(), {"name": name, "kind": "city", "country_code": city.country_code})
+        key = name.lower()
+        word_count = len(name.split())
+        is_major = key in _MAJOR_SINGLE_WORD_CITIES
+        is_long_unique = word_count == 1 and len(key) >= 7   # "Marrakech", "Edinburgh"
+        is_multi_word = word_count >= 2                       # "Hong Kong", "Loch Lomond"
+        if not (is_major or is_long_unique or is_multi_word):
+            continue
+        _add(key, {"name": name, "kind": "city", "country_code": city.country_code})
 
     logger.info("destination_resolver index built: %d entries", len(index))
     return index, blocked
@@ -150,14 +223,22 @@ def _tokenize(text: str) -> List[Tuple[str, int, int]]:
 
 def find_destinations(text: str, max_window: int = 4) -> List[dict]:
     """
-    Scan `text` for known destinations (cities or countries from the DB).
+    Scan `text` for known destinations (cities, states, or countries from the
+    country-state-city DB).
 
     Returns destinations in **document order**, deduped, with shape:
         {"name": "Dubai", "kind": "city", "country_code": "AE",
          "start": 12, "end": 17}
 
-    Multi-word names ("Abu Dhabi", "New York", "Hong Kong") are matched
-    greedily — the longest window match wins at each position.
+    Filtering policy (using the package's own data — no large hardcoded
+    whitelist):
+      1. Multi-word names ("Abu Dhabi", "New York") are matched greedily —
+         longest window wins.
+      2. The FIRST hit in document order anchors a "context country".
+      3. Subsequent hits are KEPT only if they share the anchor's country, are
+         themselves countries, or have a multi-word name. Single-word obscure
+         village hits in unrelated countries (e.g. a Montenegrin town named
+         "Bar" appearing because the user wrote "Bar Hopping") are dropped.
     """
     if not text:
         return []
@@ -188,20 +269,43 @@ def find_destinations(text: str, max_window: int = 4) -> List[dict]:
                 continue
             start = tokens[i][1]
             end = tokens[i + w - 1][2]
-            found.append({**rec, "start": start, "end": end})
+            found.append({**rec, "name_words": w, "start": start, "end": end})
             for j in range(i, i + w):
                 consumed[j] = True
             break
 
-    # Dedupe by name while preserving order
-    seen: Set[str] = set()
+    if not found:
+        return []
+
+    # ── Country-anchored filter ───────────────────────────────────────────
+    # The first detected destination establishes the anchor country. Keep
+    # later hits that fit any of:
+    #    - same country as the anchor (sister cities of the main destination)
+    #    - country-level hits anywhere (multi-country trips: "Italy and France")
+    #    - multi-word matches (less likely to be false positives)
+    anchor_cc = found[0].get("country_code") or ""
+    anchor_kind = found[0].get("kind")
     out: List[dict] = []
+    seen: Set[str] = set()
     for r in found:
         key = r["name"].lower()
         if key in seen:
             continue
+        if out:
+            cc = r.get("country_code") or ""
+            kind = r.get("kind")
+            words = r.get("name_words", 1)
+            if not (
+                cc == anchor_cc
+                or kind == "country"
+                or anchor_kind == "country"
+                or words >= 2
+            ):
+                continue
         seen.add(key)
-        out.append(r)
+        # Strip the bookkeeping field before returning
+        rec = {k: v for k, v in r.items() if k != "name_words"}
+        out.append(rec)
     return out
 
 

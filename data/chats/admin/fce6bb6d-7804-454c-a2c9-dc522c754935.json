@@ -1,0 +1,196 @@
+{
+  "session_id": "fce6bb6d-7804-454c-a2c9-dc522c754935",
+  "username": "admin",
+  "chat_name": "8N Date · 32 Pax",
+  "name_auto": true,
+  "created_at": "2026-04-26T16:09:20.350366Z",
+  "updated_at": "2026-04-26T16:18:27.691283Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "Date Trip",
+    "travelers_max": 32,
+    "duration": "8"
+  },
+  "fields": {
+    "destination": "Date",
+    "destinations": [
+      "Date",
+      "India",
+      "Delhi",
+      "London",
+      "Edinburg",
+      "Edinburgh",
+      "Free",
+      "Time",
+      "Glasgow",
+      "Loch Lomond",
+      "Tea",
+      "City",
+      "Early",
+      "Arena",
+      "Tower",
+      "Thames",
+      "West",
+      "Abbey",
+      "Bridge",
+      "Ben",
+      "Buckingham",
+      "Eye",
+      "Windsor Castle",
+      "Gala",
+      "Hard",
+      "Street",
+      "Oxford"
+    ],
+    "trip_start_date": "2026-06-18",
+    "checkin_date": "2026-06-18",
+    "total_nights": 7,
+    "nights": 7,
+    "duration": 8,
+    "pax": 32,
+    "adults": 32,
+    "preferred_activities": [
+      "River Cruise",
+      "Classical Concert"
+    ],
+    "event_type": "leisure",
+    "client_type": "leisure",
+    "raw_text": "Hi Yash\n\nPlease share your final no regret cost as per revised itinerary - \n\nPax - 32 +/- 10% \nDate - 11th to 18th June 2026​\n\n\nAirline\nFlight No\nDepart\nfrom\nArrive\nat\nAIR INDIA\nAI-161\n1:30\nDELHI\n7:30\nLONDON\nAIR INDIA\nAI-2018\n20:35\nLONDON\n11:00\nDELHI\n\n\n\nDay -1: ARRIVE EDINBURG - DINNER - EDINBURG \nArrive at London Airport \nBrunch at Indian restaurant\nTransfer to London Train Station to board the train to Edinburgh (between 12PM - 1PM)\nMeal Allowance (30GBP) - by Adiona \nArrival at Edinburgh\nTransfer to hotel \nCheck in at hotel \nFree Time\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -2: GLASGOW - LUNCH - CRUISE- DINNER - EDINBURG \nBreakfast at hotel\nProceed for Guided orientation tour of Glasgow \nLunch at Indian restaurant\nLoch Lomond Cruise with Masala tea + two Indian snacks on board cruise\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -3: ROYAL YACHT BRITANNIA - SCOTH WHISKEY - HALF DAY GUIDED TOUR - CASTLE ENTRANCE -  DINNER \nBreakfast at hotel \nRoyal Yacht Britannia\nScotch Whiskey Experience\nLunch at Indian restaurant\nGuided city tour of Edinburg\nVisit Edinburgh Castle\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -4: EDINBURG - LONDON - LUNCH - 02 CLIMB - DINNER\nBreakfast at the hotel & Check out\nGlasgow to London train Tkt - (between 11:00 - 12:00 hrs)\nEarly lunch at Indian restaurant nearby train station\nArrive at London Train station\nTransfer to hotel for check in\n02 Arena climb - twilight climb \nDinner at Indian restaurant\nOvernight stay in London\n \nDay -5: LONDON - HALF DAY GUIDED CITY TOUR +  TOWER OF LONDON + THAMES RIVER CRUISE\nBreakfast at hotel\nHalf day guided city tour of London 0rientation tour - drive through Piccadily, West minister Abbey, British Museum, London Bridge, Big Ben, House of Parliament - 3 hours guide, no entrance\n15 minutes stop over at Buckingham palace - no entrance -subject to operation\nLunch at Indian restaurant\nVisit Tower of London\nThames river cruise\nDinner at Indian Restaurant\nOvernight stay in London\n \nDay -6: LONDON - LORD STADIUM - LUNCH - LONDON EYE\nBreakfast at Hotel\nOval Stadium tour/LORDS CLASSIC TOUR\nLunch at Indian restaurant\nLondon Eye\nDinner at Indian restaurant\nOvernight stay in London\n \nDay -7: LONDON - WINSOR CASTLE - LUNCH - MADAME TUSSAUD\nBreakfast at Hotel\nProceed for Windsor Castle\nLunch at Indian restaurant\nMadame Tussaud\nGala Dinner at Indian restaurant with 2hrs free flow of 2 veg + 2 non - veg starters + Soft drinks, juices, soda, mixer, ice\nHard Liquor we may carry\nOvernight stay in London\n \nDay -8 LONDON - SH0PPING DROP -  TRANSFER\nBreakfast at Hotel\nCheck out\nDrop at shopping street /oxford or similar\nLunch at Indian restaurant\nAirport drop",
+    "hotel_type": "mid-range",
+    "client_industry": "other",
+    "checkout_date": "2026-06-26",
+    "route": "Date → India → Delhi → London → Edinburg → Edinburgh → Free → Time → Glasgow → Loch Lomond → Tea → City → Early → Arena → Tower → Thames → West → Abbey → Bridge → Ben → Buckingham → Eye → Windsor Castle → Gala → Hard → Street → Oxford"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Hi Yash\n\nPlease share your final no regret cost as per revised itinerary - \n\nPax - 32 +/- 10% \nDate - 11th to 18th June 2026​\n\n\nAirline\nFlight No\nDepart\nfrom\nArrive\nat\nAIR INDIA\nAI-161\n1:30\nDELHI\n7:30\nLONDON\nAIR INDIA\nAI-2018\n20:35\nLONDON\n11:00\nDELHI\n\n\n\nDay -1: ARRIVE EDINBURG - DINNER - EDINBURG \nArrive at London Airport \nBrunch at Indian restaurant\nTransfer to London Train Station to board the train to Edinburgh (between 12PM - 1PM)\nMeal Allowance (30GBP) - by Adiona \nArrival at Edinburgh\nTransfer to hotel \nCheck in at hotel \nFree Time\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -2: GLASGOW - LUNCH - CRUISE- DINNER - EDINBURG \nBreakfast at hotel\nProceed for Guided orientation tour of Glasgow \nLunch at Indian restaurant\nLoch Lomond Cruise with Masala tea + two Indian snacks on board cruise\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -3: ROYAL YACHT BRITANNIA - SCOTH WHISKEY - HALF DAY GUIDED TOUR - CASTLE ENTRANCE -  DINNER \nBreakfast at hotel \nRoyal Yacht Britannia\nScotch Whiskey Experience\nLunch at Indian restaurant\nGuided city tour of Edinburg\nVisit Edinburgh Castle\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -4: EDINBURG - LONDON - LUNCH - 02 CLIMB - DINNER\nBreakfast at the hotel & Check out\nGlasgow to London train Tkt - (between 11:00 - 12:00 hrs)\nEarly lunch at Indian restaurant nearby train station\nArrive at London Train station\nTransfer to hotel for check in\n02 Arena climb - twilight climb \nDinner at Indian restaurant\nOvernight stay in London\n \nDay -5: LONDON - HALF DAY GUIDED CITY TOUR +  TOWER OF LONDON + THAMES RIVER CRUISE\nBreakfast at hotel\nHalf day guided city tour of London 0rientation tour - drive through Piccadily, West minister Abbey, British Museum, London Bridge, Big Ben, House of Parliament - 3 hours guide, no entrance\n15 minutes stop over at Buckingham palace - no entrance -subject to operation\nLunch at Indian restaurant\nVisit Tower of London\nThames river cruise\nDinner at Indian Restaurant\nOvernight stay in London\n \nDay -6: LONDON - LORD STADIUM - LUNCH - LONDON EYE\nBreakfast at Hotel\nOval Stadium tour/LORDS CLASSIC TOUR\nLunch at Indian restaurant\nLondon Eye\nDinner at Indian restaurant\nOvernight stay in London\n \nDay -7: LONDON - WINSOR CASTLE - LUNCH - MADAME TUSSAUD\nBreakfast at Hotel\nProceed for Windsor Castle\nLunch at Indian restaurant\nMadame Tussaud\nGala Dinner at Indian restaurant with 2hrs free flow of 2 veg + 2 non - veg starters + Soft drinks, juices, soda, mixer, ice\nHard Liquor we may carry\nOvernight stay in London\n \nDay -8 LONDON - SH0PPING DROP -  TRANSFER\nBreakfast at Hotel\nCheck out\nDrop at shopping street /oxford or similar\nLunch at Indian restaurant\nAirport drop"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your request for the trip to **AIR**.\n\nDetails I have so far:\n  - Destination: AIR\n  - Travel date: 2026-06-18\n\nTo build the itinerary, could you please tell me the **number of pax (travelers)**?"
+    },
+    {
+      "role": "user",
+      "content": "32"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your request for the trip to **AIR**.\n\nDetails I have so far:\n  - Destination: AIR\n  - Travel date: 2026-06-18\n\nTo build the itinerary, could you please tell me the **number of pax (travelers)**?"
+    },
+    {
+      "role": "user",
+      "content": "32 pax"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your request for the trip to **AIR**.\n\nDetails I have so far:\n  - Destination: AIR\n  - Pax: 32\n  - Travel date: 2026-06-18\n\nTo build the itinerary, could you please tell me the **trip duration (number of nights)**?"
+    },
+    {
+      "role": "user",
+      "content": "7 nights"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: AIR\nDuration: 7 nights / 8 days from 2026-06-18\nPax: 32 adults\nPreferred activities: River Cruise, Classical Concert\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: Date → India → Delhi → London → Edinburg → Edinburgh → Free → Time → Glasgow → Loch Lomond → Tea → City → Early → Arena → Tower → Thames → West → Abbey → Bridge → Ben → Buckingham → Eye → Windsor Castle → Gala → Hard → Street → Oxford\nRoute: Date → India → Delhi → London → Edinburg → Edinburgh → Free → Time → Glasgow → Loch Lomond → Tea → City → Early → Arena → Tower → Thames → West → Abbey → Bridge → Ben → Buckingham → Eye → Windsor Castle → Gala → Hard → Street → Oxford\nDuration: 7 nights / 8 days from 2026-06-18\nPax: 32 adults\nPreferred activities: River Cruise, Classical Concert\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T16:09:20.317613Z] Detected formal request format; extracting all fields and generating itinerary",
+    "[2026-04-26T16:09:20.347355Z] Formal parsed: destinations=['AIR'] nights=None pax=None",
+    "[2026-04-26T16:09:20.347355Z] Formal request missing fields: ['number of pax (travelers)', 'trip duration (number of nights)']",
+    "[2026-04-26T16:09:36.984121Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:09:36.985143Z] Follow-up merged; pax=None dest=AIR nights=None",
+    "[2026-04-26T16:09:36.985143Z] Still missing after follow-up: ['number of pax (travelers)', 'trip duration (number of nights)']",
+    "[2026-04-26T16:09:42.485554Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:09:42.501775Z] Follow-up merged; pax=32 dest=AIR nights=None",
+    "[2026-04-26T16:09:42.501775Z] Still missing after follow-up: ['trip duration (number of nights)']",
+    "[2026-04-26T16:09:50.857163Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:09:50.858180Z] Follow-up merged; pax=32 dest=AIR nights=7",
+    "[2026-04-26T16:09:50.859170Z] All required fields confirmed after follow-up; proceeding to generation",
+    "[2026-04-26T16:09:52.630143Z] User confirmed trip details; proceeding to itinerary generation",
+    "[2026-04-26T16:09:52.630143Z] Using client_type from session field: 'leisure'",
+    "[2026-04-26T16:09:52.702997Z] destination='AIR' looks bogus — attempting recovery",
+    "[2026-04-26T16:09:55.165203Z] Recovered destination='Date' (was 'AIR')",
+    "[2026-04-26T16:09:57.163072Z] Loaded 1 user KB documents for query='Date leisure'",
+    "[2026-04-26T16:09:57.164075Z] Started enrichment for destination(s)='Date, India, Delhi, London, Edinburg, Edinburgh, Free, Time, Glasgow, Loch Lomond, Tea, City, Early, Arena, Tower, Thames, West, Abbey, Bridge, Ben, Buckingham, Eye, Windsor Castle, Gala, Hard, Street, Oxford'",
+    "[2026-04-26T16:09:57.164075Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch",
+    "[2026-04-26T16:09:57.206564Z] Computed price context (heuristic) for pax=32",
+    "[2026-04-26T16:10:12.187535Z] realtime_task timed out after 15s",
+    "[2026-04-26T16:10:14.406975Z] Pre-gathered real-time data sanity: wiki=no; attractions=0; news=0",
+    "[2026-04-26T16:10:20.565453Z] Price context fetched: cities=['Date', 'India', 'Delhi', 'London', 'Edinburg', 'Edinburgh', 'Free', 'Time', 'Glasgow', 'Loch Lomond', 'Tea', 'City', 'Early', 'Arena', 'Tower', 'Thames', 'West', 'Abbey', 'Bridge', 'Ben', 'Buckingham', 'Eye', 'Windsor Castle', 'Gala', 'Hard', 'Street', 'Oxford']",
+    "[2026-04-26T16:10:33.578249Z] Tavily: injected 3 city block(s) into prompt",
+    "[2026-04-26T16:10:33.581238Z] Recomputed price context with live data: mined=12 prices, hotel_source=live+heuristic (n=9)",
+    "[2026-04-26T16:10:33.581238Z] Injecting 1 KB document(s) into LLM prompt",
+    "[2026-04-26T16:10:33.599238Z] Calling LLM: model=llama3, base_url=http://localhost:11434",
+    "[2026-04-26T16:18:27.451563Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": {
+    "fields": {
+      "destination": "Date",
+      "destinations": [
+        "Date",
+        "India",
+        "Delhi",
+        "London",
+        "Edinburg",
+        "Edinburgh",
+        "Free",
+        "Time",
+        "Glasgow",
+        "Loch Lomond",
+        "Tea",
+        "City",
+        "Early",
+        "Arena",
+        "Tower",
+        "Thames",
+        "West",
+        "Abbey",
+        "Bridge",
+        "Ben",
+        "Buckingham",
+        "Eye",
+        "Windsor Castle",
+        "Gala",
+        "Hard",
+        "Street",
+        "Oxford"
+      ],
+      "trip_start_date": "2026-06-18",
+      "checkin_date": "2026-06-18",
+      "total_nights": 7,
+      "nights": 7,
+      "duration": 8,
+      "pax": 32,
+      "adults": 32,
+      "preferred_activities": [
+        "River Cruise",
+        "Classical Concert"
+      ],
+      "event_type": "leisure",
+      "client_type": "leisure",
+      "raw_text": "Hi Yash\n\nPlease share your final no regret cost as per revised itinerary - \n\nPax - 32 +/- 10% \nDate - 11th to 18th June 2026​\n\n\nAirline\nFlight No\nDepart\nfrom\nArrive\nat\nAIR INDIA\nAI-161\n1:30\nDELHI\n7:30\nLONDON\nAIR INDIA\nAI-2018\n20:35\nLONDON\n11:00\nDELHI\n\n\n\nDay -1: ARRIVE EDINBURG - DINNER - EDINBURG \nArrive at London Airport \nBrunch at Indian restaurant\nTransfer to London Train Station to board the train to Edinburgh (between 12PM - 1PM)\nMeal Allowance (30GBP) - by Adiona \nArrival at Edinburgh\nTransfer to hotel \nCheck in at hotel \nFree Time\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -2: GLASGOW - LUNCH - CRUISE- DINNER - EDINBURG \nBreakfast at hotel\nProceed for Guided orientation tour of Glasgow \nLunch at Indian restaurant\nLoch Lomond Cruise with Masala tea + two Indian snacks on board cruise\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -3: ROYAL YACHT BRITANNIA - SCOTH WHISKEY - HALF DAY GUIDED TOUR - CASTLE ENTRANCE -  DINNER \nBreakfast at hotel \nRoyal Yacht Britannia\nScotch Whiskey Experience\nLunch at Indian restaurant\nGuided city tour of Edinburg\nVisit Edinburgh Castle\nDinner at Indian restaurant\nOvernight stay in Edinburgh \n \nDay -4: EDINBURG - LONDON - LUNCH - 02 CLIMB - DINNER\nBreakfast at the hotel & Check out\nGlasgow to London train Tkt - (between 11:00 - 12:00 hrs)\nEarly lunch at Indian restaurant nearby train station\nArrive at London Train station\nTransfer to hotel for check in\n02 Arena climb - twilight climb \nDinner at Indian restaurant\nOvernight stay in London\n \nDay -5: LONDON - HALF DAY GUIDED CITY TOUR +  TOWER OF LONDON + THAMES RIVER CRUISE\nBreakfast at hotel\nHalf day guided city tour of London 0rientation tour - drive through Piccadily, West minister Abbey, British Museum, London Bridge, Big Ben, House of Parliament - 3 hours guide, no entrance\n15 minutes stop over at Buckingham palace - no entrance -subject to operation\nLunch at Indian restaurant\nVisit Tower of London\nThames river cruise\nDinner at Indian Restaurant\nOvernight stay in London\n \nDay -6: LONDON - LORD STADIUM - LUNCH - LONDON EYE\nBreakfast at Hotel\nOval Stadium tour/LORDS CLASSIC TOUR\nLunch at Indian restaurant\nLondon Eye\nDinner at Indian restaurant\nOvernight stay in London\n \nDay -7: LONDON - WINSOR CASTLE - LUNCH - MADAME TUSSAUD\nBreakfast at Hotel\nProceed for Windsor Castle\nLunch at Indian restaurant\nMadame Tussaud\nGala Dinner at Indian restaurant with 2hrs free flow of 2 veg + 2 non - veg starters + Soft drinks, juices, soda, mixer, ice\nHard Liquor we may carry\nOvernight stay in London\n \nDay -8 LONDON - SH0PPING DROP -  TRANSFER\nBreakfast at Hotel\nCheck out\nDrop at shopping street /oxford or similar\nLunch at Indian restaurant\nAirport drop",
+      "hotel_type": "mid-range",
+      "client_industry": "other",
+      "checkout_date": "2026-06-26",
+      "route": "Date → India → Delhi → London → Edinburg → Edinburgh → Free → Time → Glasgow → Loch Lomond → Tea → City → Early → Arena → Tower → Thames → West → Abbey → Bridge → Ben → Buckingham → Eye → Windsor Castle → Gala → Hard → Street → Oxford"
+    }
+  },
+  "pending_formal_request": null,
+  "formal_request_detected": true
+}

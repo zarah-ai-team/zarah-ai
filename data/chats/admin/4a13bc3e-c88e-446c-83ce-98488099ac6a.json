@@ -1,0 +1,51 @@
+{
+  "session_id": "4a13bc3e-c88e-446c-83ce-98488099ac6a",
+  "username": "admin",
+  "chat_name": "Dubai",
+  "name_auto": false,
+  "created_at": "2026-04-26T15:27:44.580354Z",
+  "updated_at": "2026-04-26T15:27:58.380023Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "Dubai Trip",
+    "travelers_max": 6,
+    "duration": "6"
+  },
+  "fields": {
+    "destination": "Dubai",
+    "destination_kind": "city",
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other",
+    "nights": 6,
+    "duration": 6,
+    "pax": 6
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Dubai"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Dubai. How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    },
+    {
+      "role": "user",
+      "content": "6 night 6 days"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Dubai, 6 travellers, 6 nights. What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T15:27:44.576350Z] Conversational mode: progressive field collector",
+    "[2026-04-26T15:27:58.348458Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

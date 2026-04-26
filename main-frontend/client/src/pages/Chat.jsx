@@ -18,6 +18,7 @@ import {
   Sparkles,
   MapPin,
   Calculator,
+  Trash2 as Trash2Icon,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -25,6 +26,7 @@ import {
   getChatSession,
   updateChatMetadata,
   listChats,
+  clearAllChats,
 } from "../services/chatService";
 import ItineraryDisplay, { generateItineraryPDF } from "../components/chat/ItineraryDisplay";
 import ConfirmationCard from "../components/chat/ConfirmationCard";
@@ -130,24 +132,83 @@ function tryParseJson(str) {
 }
 
 // ── Quick-reply chip suggestions keyed by question type ──
+// Build a small set of future-dated chips at module load. Static "December 2025"
+// became a past date once 2026 rolled around; computing on the fly avoids that.
+function _futureDateChips() {
+  const now = new Date();
+  const fmt = (d) =>
+    d.toLocaleString("en-GB", { month: "long", year: "numeric" });
+  const months = [];
+  for (const offset of [1, 2, 3, 6]) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 15);
+    months.push(fmt(d));
+  }
+  return ["Next month", "In 2 months", ...months.slice(2)];
+}
+
 const QUESTION_CHIPS = {
   destination : ["Dubai", "Abu Dhabi", "Singapore", "Bali / Indonesia", "Europe Multi-City", "Maldives"],
   duration    : ["3 nights", "5 nights", "7 nights", "10 nights", "14 nights"],
-  pax         : ["10 pax", "20 pax", "30 pax", "50 pax", "100 pax"],
+  pax         : ["2 adults", "4 pax", "6 pax", "10 pax", "20 pax", "50 pax"],
   event_type  : ["Leisure", "Corporate Offsite", "Incentive Trip", "MICE / Conference", "Honeymoon", "Extension Trip"],
   hotel       : ["3-Star", "4-Star", "4-Star Deluxe", "5-Star Luxury"],
   transport   : ["Private Van", "Mercedes Viano", "Coach / Bus", "No preference"],
+  date        : _futureDateChips(),
 };
+
+/**
+ * Render a tiny subset of markdown inline — **bold** and *italic* — so the
+ * bot's clarification prompts ("could you confirm the **destination**?") show
+ * the bolded label instead of literal asterisks.
+ */
+function renderInlineMd(text) {
+  if (text == null) return text;
+  const s = String(text);
+  // Split on **bold** first; each chunk is either a bold span or plain text
+  // that we further split on *italic*.
+  const out = [];
+  let key = 0;
+  s.split(/(\*\*[^*]+\*\*)/g).forEach((chunk) => {
+    if (chunk.startsWith("**") && chunk.endsWith("**") && chunk.length >= 4) {
+      out.push(<strong key={key++}>{chunk.slice(2, -2)}</strong>);
+      return;
+    }
+    chunk.split(/(\*[^*\n]+\*)/g).forEach((sub) => {
+      if (sub.startsWith("*") && sub.endsWith("*") && sub.length >= 3 && !sub.startsWith("**")) {
+        out.push(<em key={key++}>{sub.slice(1, -1)}</em>);
+      } else if (sub) {
+        out.push(<span key={key++}>{sub}</span>);
+      }
+    });
+  });
+  return out;
+}
 
 function getChipsForPrompt(prompt) {
   if (!prompt) return [];
-  const p = prompt.toLowerCase();
-  if (p.includes("destination") || p.includes("where") || p.includes("cities") || p.includes("travel to")) return QUESTION_CHIPS.destination;
-  if (p.includes("nights") || p.includes("duration") || p.includes("how long") || p.includes("days")) return QUESTION_CHIPS.duration;
-  if (p.includes("pax") || p.includes("travelers") || p.includes("people") || p.includes("how many")) return QUESTION_CHIPS.pax;
-  if (p.includes("occasion") || p.includes("event") || p.includes("trip type") || p.includes("purpose")) return QUESTION_CHIPS.event_type;
-  if (p.includes("hotel") || p.includes("star") || p.includes("category") || p.includes("accommodation")) return QUESTION_CHIPS.hotel;
-  if (p.includes("transport") || p.includes("vehicle")) return QUESTION_CHIPS.transport;
+  // The bot's prompt often includes a "Details I have so far" recap that lists
+  // already-collected fields ("- Destination: UAE - Nights: 2") followed by
+  // the actual question. Matching the whole prompt mis-routes — e.g. asking
+  // for pax shows destination chips because the recap mentions destination.
+  // Strategy: focus on the LAST question (text after the last '?' or last
+  // bolded **field** the bot just requested). Match the asked field, not
+  // the recap context.
+  const lower = prompt.toLowerCase();
+  // Try to find the most recent **bolded label** — the bot wraps the asked
+  // field in **markdown bold** (e.g. "tell me the **number of pax**").
+  const boldMatches = [...prompt.matchAll(/\*\*([^*]+)\*\*/g)];
+  const askedField = boldMatches.length
+    ? boldMatches[boldMatches.length - 1][1].toLowerCase()
+    : "";
+  // Order matters: most specific first.
+  const test = (re) => re.test(askedField) || (askedField === "" && re.test(lower.split("?").slice(-2)[0] || lower));
+  if (test(/\b(pax|travel(?:l)?ers?|people|adults|members|guests|how many)\b/)) return QUESTION_CHIPS.pax;
+  if (test(/\b(nights?|duration|how long|days?|trip length)\b/)) return QUESTION_CHIPS.duration;
+  if (test(/\b(start\s*date|trip\s*start|departure|travel\s*date|when\s+does)\b/)) return QUESTION_CHIPS.date || [];
+  if (test(/\b(occasion|event|trip\s*type|purpose|kind\s*of\s*trip)\b/)) return QUESTION_CHIPS.event_type;
+  if (test(/\b(hotel|star|category|accommodation)\b/)) return QUESTION_CHIPS.hotel;
+  if (test(/\b(transport|vehicle)\b/)) return QUESTION_CHIPS.transport;
+  if (test(/\b(destination|where|cities?|travel to|country)\b/)) return QUESTION_CHIPS.destination;
   return [];
 }
 
@@ -194,7 +255,7 @@ function QuestionCard({ text, collected, chips, onChipClick }) {
           </div>
         </div>
       )}
-      <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed">{text}</p>
+      <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">{renderInlineMd(text)}</p>
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {chips.map((chip) => (
@@ -536,35 +597,57 @@ const Chat = () => {
         updateChatMetadata(returnedSid, { chat_name: name }).catch(() => {});
       }
     } catch (err) {
-      // Network / backend hiccup — instead of a scary "Failed to fetch" toast,
-      // greet the user and steer them toward the four details we actually need.
-      // The real error still goes to the console for devs to debug.
       console.error("Chat request failed:", err);
-      setLastError(null);   // don't show the error banner — friendly bubble replaces it
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          isFallback: true,
-          fallbackContent: {
-            greeting: `Hi ${firstName}, I'm Zarah — your travel planning assistant.`,
-            intro: "Let's plan your trip together. Could you share a few details?",
-            fields: [
-              { label: "Destination", hint: "country, city, or route (e.g. Singapore or Dubai → Abu Dhabi)" },
-              { label: "Duration",    hint: "number of nights / days (e.g. 5 nights)" },
-              { label: "Travelers",   hint: "how many pax (e.g. 4 adults)" },
-              { label: "Trip type",   hint: "leisure, corporate, honeymoon, incentive, family, etc." },
-            ],
-            outro: 'Optional but helpful: budget, hotel preference, dates, must-do activities. Once you share these, just say "generate itinerary" and I\'ll build a full day-by-day plan.',
+      // Detect Ollama-unavailable (HTTP 503) — backend now health-checks the
+      // LLM before kicking off any heavy work, so this fires within ~2 seconds
+      // instead of leaving the loading pipeline up for 15 minutes.
+      const status = err?.status;
+      const detail = err?.data?.detail;
+      const ollamaDown =
+        status === 503 ||
+        (typeof detail === "object" && detail?.error === "ollama_unavailable") ||
+        /ollama|llm/i.test(String(err?.message || ""));
+
+      setLastError(null);
+      if (ollamaDown) {
+        const errMsg =
+          (typeof detail === "object" && detail?.message) ||
+          "I can't reach the LLM service right now. Please make sure Ollama is running (`ollama serve`) and the model is pulled (`ollama list`), then try again.";
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "error",
+            text: `⚠️ LLM service unavailable. ${errMsg}`,
           },
-        },
-      ]);
+        ]);
+      } else {
+        // Generic network/server hiccup → friendly fallback greeting.
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "assistant",
+            isFallback: true,
+            fallbackContent: {
+              greeting: `Hi ${firstName}, I'm Zarah — your travel planning assistant.`,
+              intro: "Let's plan your trip together. Could you share a few details?",
+              fields: [
+                { label: "Destination", hint: "country, city, or route (e.g. Singapore or Dubai → Abu Dhabi)" },
+                { label: "Duration",    hint: "number of nights / days (e.g. 5 nights)" },
+                { label: "Travelers",   hint: "how many pax (e.g. 4 adults)" },
+                { label: "Trip type",   hint: "leisure, corporate, honeymoon, incentive, family, etc." },
+              ],
+              outro: 'Optional but helpful: budget, hotel preference, dates, must-do activities. Once you share these, just say "generate itinerary" and I\'ll build a full day-by-day plan.',
+            },
+          },
+        ]);
+      }
     } finally {
-      setIsTyping(false);
+      setIsTyping(false);    // ← CRITICAL: stops the pipeline UI immediately
       setIsGenerating(false);
     }
-  }, [query, messages, isTyping, sessionId, chatName]);
+  }, [query, messages, isTyping, sessionId, chatName, firstName]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -695,14 +778,37 @@ const Chat = () => {
           </button>
         </div>
 
-        {/* New chat button */}
-        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-white/10">
+        {/* New chat button + Clear all history */}
+        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-white/10 space-y-1.5">
           <button
             onClick={() => { handleNewChat(); setShowHistory(false); }}
             className="w-full flex items-center gap-2 bg-dark-300 dark:bg-[#FFDE39] text-white dark:text-[#1f1f1f] text-xs font-medium px-3 py-2 rounded-lg hover:bg-dark-200 dark:hover:brightness-95 transition-all duration-300 cursor-pointer"
           >
             <MessageSquarePlus size={13} className="text-[#FFDE39] dark:text-[#1f1f1f]" />
             New Chat
+          </button>
+          <button
+            onClick={async () => {
+              if (!historyList.length) return;
+              const ok = window.confirm(
+                "Clear all chat history? Saved itineraries will be kept (they live under Itinerary Management)."
+              );
+              if (!ok) return;
+              try {
+                await clearAllChats({ keepSaved: true });
+                setHistoryList((prev) => prev.filter((s) => s.has_saved_itinerary));
+                try { localStorage.removeItem("zarah:lastChatSessionId"); } catch {}
+                handleNewChat();
+                setShowHistory(false);
+              } catch (e) {
+                alert("Could not clear history: " + (e.message || "Unknown error"));
+              }
+            }}
+            disabled={!historyList.length}
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-300 hover:text-red-700 dark:hover:text-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-500/30 transition-all duration-300 cursor-pointer"
+            title="Delete all chats (keeps saved itineraries)"
+          >
+            <Trash2Icon size={12} /> Clear all chat history
           </button>
         </div>
 
@@ -994,7 +1100,7 @@ const Chat = () => {
                           />
                         ) : (
                           <p className="text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-poppins">
-                            {msg.text}
+                            {renderInlineMd(msg.text)}
                           </p>
                         )}
                       </div>

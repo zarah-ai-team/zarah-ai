@@ -1,0 +1,45 @@
+{
+  "session_id": "2bbcb0f4-f67b-4f34-b85a-323a165629ad",
+  "username": "admin",
+  "chat_name": "Hello Zarah",
+  "name_auto": false,
+  "created_at": "2026-04-26T15:27:19.352073Z",
+  "updated_at": "2026-04-26T15:27:29.528410Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "Hello Zarah Trip"
+  },
+  "fields": {
+    "destination": "Hello Zarah",
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Hello Zarah"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Hello Zarah. How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    },
+    {
+      "role": "user",
+      "content": "Hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Hello Zarah. How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T15:27:17.570264Z] Conversational mode: progressive field collector",
+    "[2026-04-26T15:27:29.493394Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

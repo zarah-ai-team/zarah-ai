@@ -92,36 +92,36 @@ _COUNTRY_ALIASES = {
 
 def _extract_destination_heuristic(text: str, out: Dict) -> None:
     """
-    Last-resort destination extraction for narrative requests like
-    "Plan a trip to Singapore in March 2026" or "3 days 2 nights in UAE".
-    Stops cleanly at digits, dates, "for", "in", punctuation.
-    """
-    _STOP = r"for|in|on|during|from|with|including|next|this|by|over|between"
+    Last-resort destination extraction for narrative / email-style requests.
 
-    patterns = [
-        # "to <City>" / "in <City>" — capitalized city/country (1-3 words)
-        rf"\bto\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){{0,2}})\b(?:\s+(?:{_STOP})\b|[,\.\d]|$)",
-        rf"\bin\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){{0,2}})\b(?:\s+(?:{_STOP})\b|[,\.\d]|$)",
-        # All-caps acronyms (e.g. UAE, USA, UK) — between 2 and 5 letters
-        r"\b(?:to|in|at|for|visit|visiting)\s+([A-Z]{2,5})\b",
-    ]
-    for pat in patterns:
-        m = re.search(pat, text)
-        if not m:
-            continue
-        cand = m.group(1).strip().strip(".,")
-        if not cand:
-            continue
-        # Map known aliases (uae → UAE, etc.)
-        canon = _COUNTRY_ALIASES.get(cand.lower(), cand)
-        # Filter generic words that pass the regex but aren't destinations
-        if canon.lower() in {"the", "this", "that", "ferrari", "world", "lexus", "december",
-                             "january", "february", "march", "april", "may", "june", "july",
-                             "august", "september", "october", "november"}:
-            continue
-        out["destination"] = canon
-        out["destinations"] = [canon]
-        return
+    Strategy: defer to the country-state-city DB resolver, which scans the
+    ENTIRE text for known cities/countries and returns them in document order.
+    This avoids brittle regex picks like "to Montjuïc Castle viewpoint" beating
+    "in Barcelona" just because it appears earlier.
+    """
+    # 1. Authoritative path — resolver-backed destination scan.
+    try:
+        from destination_resolver import detect_route
+        route = detect_route(text) or {}
+        names = route.get("destinations") or []
+        if names:
+            out["destination"] = names[0]
+            if len(names) > 1:
+                out["destinations"] = names
+                out["route"] = route.get("route_str") or " → ".join(names)
+            else:
+                out["destinations"] = [names[0]]
+            return
+    except Exception:
+        pass
+
+    # 2. Fallback — alias map for short tokens like "UAE" / "USA" that the DB
+    #    might not have under those exact strings.
+    for alias, canonical in _COUNTRY_ALIASES.items():
+        if re.search(rf"\b{re.escape(alias)}\b", text, re.IGNORECASE):
+            out["destination"] = canonical
+            out["destinations"] = [canonical]
+            return
 
 
 def format_parsed_request_summary(parsed: Dict[str, Any]) -> str:

@@ -188,19 +188,24 @@ def _is_known_destination(name: str) -> bool:
     # treated as destinations.
     return False
 
-# Only these 4 fields are truly required — everything else is inferred or optional
+# Required for itinerary generation — everything else is inferred or optional.
+# trip_start_date is required so the LLM can use real, future-anchored dates for
+# each day (and so live searches like Tavily prices reflect the actual travel
+# window, not "today").
 REQUIRED_FIELDS = [
     "destination",
     "duration",
     "pax",
     "event_type",
+    "trip_start_date",
 ]
 
 PROMPTS = {
-    "destination": "Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country.",
-    "duration":    "How long is the trip? For example: 5 nights, 7 days, or 4N/5D.",
-    "pax":         "How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults.",
-    "event_type":  "What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation.",
+    "destination":     "Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country.",
+    "duration":        "How long is the trip? For example: 5 nights, 7 days, or 4N/5D.",
+    "pax":             "How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults.",
+    "event_type":      "What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation.",
+    "trip_start_date": "When does the trip start? Share a date (e.g. '15 March 2026' or '2026-03-15') — I use this to pull live prices for the actual travel window and label each day with real dates.",
 }
 
 # Maps common phrases → normalised event_type + auto-fills client_type
@@ -387,6 +392,14 @@ class ConversationManager:
         if re.search(r"\blong\s+weekend\b", text_l):
             found.setdefault("nights", 3)
             found.setdefault("duration", 4)
+        # 'fortnight' → 14 nights
+        if re.search(r"\bfortnight\b", text_l):
+            found.setdefault("nights", 14)
+            found.setdefault("duration", 15)
+        # 'a month' / 'one month' → 30 nights (DMC convention)
+        if re.search(r"\b(?:a|one)\s+month\b", text_l):
+            found.setdefault("nights", 30)
+            found.setdefault("duration", 30)
 
         # ── Pax / travellers ───────────────────────────────────────────────
         # Standard "N pax / people / persons / guests / passengers / travellers / travelers / adults / members"
@@ -428,18 +441,25 @@ class ConversationManager:
         # OR a per-person suffix (per person / pp / each / /person). Otherwise we'd
         # false-positive on bare numbers like "10 days" or "5 nights".
         m = re.search(
-            r"(INR|USD|AED|EUR|\$)\s*(\d{2,7}(?:[\.,]\d{1,3})?)(?:\s*(k|thousand))?",
+            r"(INR|USD|AED|EUR|GBP|\$|€|£|₹)\s*(\d{2,7}(?:[\.,]\d{1,3})?)(?:\s*(k|thousand|lakh|lac))?",
             text, re.IGNORECASE,
         )
         if m:
             curr, amt, mult = m.group(1), m.group(2), m.group(3)
             try:
                 amt_f = float(amt.replace(",", ""))
-                if mult and mult.lower().startswith("k"):
-                    amt_f *= 1000
+                if mult:
+                    ml = mult.lower()
+                    if ml.startswith("k"):
+                        amt_f *= 1000
+                    elif ml in ("lakh", "lac"):
+                        amt_f *= 100000
+                    elif ml.startswith("thousand"):
+                        amt_f *= 1000
                 found["budget_per_person"] = amt_f
-                curr_norm = curr.upper().replace("$", "USD")
-                found["budget_currency"] = curr_norm
+                # Normalise currency symbols → ISO codes
+                _curr_map = {"$": "USD", "€": "EUR", "£": "GBP", "₹": "INR"}
+                found["budget_currency"] = _curr_map.get(curr, curr.upper())
             except Exception:
                 pass
         else:
@@ -627,6 +647,13 @@ class ConversationManager:
         if "total_nights" in fields and "duration" not in fields:
             fields["duration"] = fields["total_nights"]
 
+        # Treat checkin_date as the trip_start_date so users who said
+        # "from 15 March 2026" or "next month" don't get re-asked for the start.
+        if not fields.get("trip_start_date") and fields.get("checkin_date"):
+            fields["trip_start_date"] = fields["checkin_date"]
+        if not fields.get("checkin_date") and fields.get("trip_start_date"):
+            fields["checkin_date"] = fields["trip_start_date"]
+
         # hotel_type default
         if "hotel_type" not in fields or not fields["hotel_type"]:
             fields["hotel_type"] = "mid-range"
@@ -763,27 +790,41 @@ class ConversationManager:
                 return {"need_more": False}
 
         elif missing == "destination":
+            # STRICT MATCHING: every candidate must be confirmed by the
+            # country-state-city package before we accept it as a destination.
+            # The previous "any short answer becomes the destination" fallback
+            # let typos and unrelated nouns slip through.
             parsed = self.detect_fields_in_text(message)
             dest = parsed.get("destination")
-            # If the parser couldn't find a destination, only accept the raw message
-            # as the destination if it LOOKS LIKE a single short answer (1-4 words,
-            # no punctuation, no digits). Long pasted requests get rejected here so
-            # they fall through to the LLM-assisted extraction below — preventing the
-            # whole paragraph from being mistakenly stored as the destination.
             if not dest:
-                words = msg_stripped.split()
-                looks_like_short_answer = (
-                    1 <= len(words) <= 4
-                    and len(msg_stripped) <= 40
-                    and not re.search(r"[\.\d!?]", msg_stripped)
-                )
-                if looks_like_short_answer:
-                    dest = msg_stripped.strip(",.!?")
+                # Try the raw message as a destination ONLY if the resolver
+                # validates it. Tokenize the message and ask the resolver if
+                # any whole-word substring is a known city/state/country.
+                if _resolver_detect_route is not None:
+                    try:
+                        _route_check = _resolver_detect_route(msg_stripped) or {}
+                        if _route_check.get("primary"):
+                            dest = _route_check["primary"]
+                    except Exception:
+                        pass
+                # As a last fallback for very short answers (1-3 words, no
+                # punct/digits), check the bare message itself against the
+                # package via _is_known_destination — which goes through the
+                # resolver.
+                if not dest:
+                    words = msg_stripped.split()
+                    if 1 <= len(words) <= 3 and len(msg_stripped) <= 40 and not re.search(r"[\.\d!?]", msg_stripped):
+                        candidate = msg_stripped.strip(",.!?")
+                        if _is_known_destination(candidate):
+                            dest = candidate
             if dest:
                 fields["destination"] = dest
                 missing = self.next_missing_field(fields)
                 if not missing:
                     return {"need_more": False}
+            else:
+                # Reject — bot will re-ask via the prompt at the bottom of update().
+                pass
 
         # If required fields are still missing, try one LLM-assisted extraction (best-effort)
         try:

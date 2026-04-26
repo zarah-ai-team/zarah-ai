@@ -1,0 +1,131 @@
+{
+  "session_id": "12bfc154-da0d-4a10-a2a3-e32db4949b38",
+  "username": "admin",
+  "chat_name": "9N USA · 60 Pax",
+  "name_auto": true,
+  "created_at": "2026-04-26T16:25:36.456685Z",
+  "updated_at": "2026-04-26T16:48:54.141203Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "USA Trip",
+    "duration": "9",
+    "travelers_max": 60
+  },
+  "fields": {
+    "destination": "USA",
+    "destinations": [
+      "USA"
+    ],
+    "trip_start_date": "2026-11-30",
+    "checkin_date": "2026-11-30",
+    "total_nights": 8,
+    "nights": 8,
+    "duration": 9,
+    "pax": 60,
+    "adults": 60,
+    "hotel_type": "luxury",
+    "hotel_category": "5-Star",
+    "transport_preference": "Private coach",
+    "vehicle_type": "coach",
+    "guide_required": true,
+    "event_type": "leisure",
+    "client_type": "leisure",
+    "contact_person": "Meghana",
+    "raw_text": "Dear Meghana,\n \nGreetings !\n \nKindly note, we are working on a very prospective query for USA(03nts nyc+03nts vegas+02nts los Angeles) as per attached itinerary flow and below details. We request you to kindly go through the same and advise your suggestions  in the itinerary along with break up costing accordingly.\n \nNo of Pax: 55-60\nDates: 20th to 30th November\nDuration : 8 Nights & 9 Days(03nts nyc+03nts vegas+02nts los Angeles).\nHotel-5* on single occupancy with 02-03 Indian items at brfst with Masala chai if possible.\n \nMeals : High end Indian Restaurants with below configuration\no    Breakfast : Indian items to be made available at all breakfasts. At least 2 to 3 items / breakfast.\no    Lunch : 2+2 starters+02 desserts with free flow of beers ( Multiple beer options in all lunches. Beer Brands should change day wise )\no    Cocktail dinners : 3+3 starters with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Gala Dinner: 04+04 starters, main course with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Menu : Should be curated day wise with no repetition of main course or starters. Secluded space to be considered at all venues for our group.\n \nApart from the attached itinerary suggestion, :\no    We will stick to the same and would also like to hear from you for any further suggestions if any.\no   We are looking forward to a night’s dinner in Los Angeles to be done at Recommended Michelin Star restaurant.\n \nPlease include the below services while you share the quote:\n·         Four 500 ml water bottles per person per day in all transfers as well as in the hotel room\n·         Please note the guide on ground should be an English speaking guide only\n·         FOC policy\n·         All tours and transfers to be in deluxe AC coach. \n \nThanks & Regards,",
+    "client_industry": "other",
+    "checkout_date": "2026-12-09"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Dear Meghana,\n \nGreetings !\n \nKindly note, we are working on a very prospective query for USA(03nts nyc+03nts vegas+02nts los Angeles) as per attached itinerary flow and below details. We request you to kindly go through the same and advise your suggestions  in the itinerary along with break up costing accordingly.\n \nNo of Pax: 55-60\nDates: 20th to 30th November\nDuration : 8 Nights & 9 Days(03nts nyc+03nts vegas+02nts los Angeles).\nHotel-5* on single occupancy with 02-03 Indian items at brfst with Masala chai if possible.\n \nMeals : High end Indian Restaurants with below configuration\no    Breakfast : Indian items to be made available at all breakfasts. At least 2 to 3 items / breakfast.\no    Lunch : 2+2 starters+02 desserts with free flow of beers ( Multiple beer options in all lunches. Beer Brands should change day wise )\no    Cocktail dinners : 3+3 starters with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Gala Dinner: 04+04 starters, main course with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Menu : Should be curated day wise with no repetition of main course or starters. Secluded space to be considered at all venues for our group.\n \nApart from the attached itinerary suggestion, :\no    We will stick to the same and would also like to hear from you for any further suggestions if any.\no   We are looking forward to a night’s dinner in Los Angeles to be done at Recommended Michelin Star restaurant.\n \nPlease include the below services while you share the quote:\n·         Four 500 ml water bottles per person per day in all transfers as well as in the hotel room\n·         Please note the guide on ground should be an English speaking guide only\n·         FOC policy\n·         All tours and transfers to be in deluxe AC coach. \n \nThanks & Regards,"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your request for the trip to **USA** for **Meghana**.\n\nDetails I have so far:\n  - Destination: USA\n  - Nights: 8\n  - Hotel: 5-Star\n  - Travel date: 2026-11-30\n\nTo build the itinerary, could you please tell me the **number of pax (travelers)**?"
+    },
+    {
+      "role": "user",
+      "content": "60"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your request for the trip to **USA** for **Meghana**.\n\nDetails I have so far:\n  - Destination: USA\n  - Nights: 8\n  - Hotel: 5-Star\n  - Travel date: 2026-11-30\n\nTo build the itinerary, could you please tell me the **number of pax (travelers)**?"
+    },
+    {
+      "role": "user",
+      "content": "60 pax"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: USA\nDuration: 8 nights / 9 days from 2026-11-30\nPax: 60 adults\nHotel: 5-Star\nTransport: Private coach\nGuide: English-speaking local guide required\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: USA\nDuration: 8 nights / 9 days from 2026-11-30\nPax: 60 adults\nHotel: 5-Star\nTransport: Private coach\nGuide: English-speaking local guide required\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T16:25:36.376119Z] Detected formal request format; extracting all fields and generating itinerary",
+    "[2026-04-26T16:25:36.415136Z] Formal parsed: destinations=['USA'] nights=8 pax=None",
+    "[2026-04-26T16:25:36.421138Z] Formal request missing fields: ['number of pax (travelers)']",
+    "[2026-04-26T16:26:00.360755Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:26:00.363480Z] Follow-up merged; pax=None dest=USA nights=8",
+    "[2026-04-26T16:26:00.364481Z] Still missing after follow-up: ['number of pax (travelers)']",
+    "[2026-04-26T16:26:08.036414Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:26:08.036414Z] Follow-up merged; pax=60 dest=USA nights=8",
+    "[2026-04-26T16:26:08.037416Z] All required fields confirmed after follow-up; proceeding to generation",
+    "[2026-04-26T16:26:22.225254Z] User confirmed trip details; proceeding to itinerary generation",
+    "[2026-04-26T16:26:22.226253Z] Using client_type from session field: 'leisure'",
+    "[2026-04-26T16:26:22.471537Z] Loaded 2 user KB documents for query='USA leisure'",
+    "[2026-04-26T16:26:22.472491Z] Started enrichment for destination(s)='USA'",
+    "[2026-04-26T16:26:22.474509Z] Hotel API disabled via HOTEL_API_ENABLED flag; skipping hotel prefetch",
+    "[2026-04-26T16:26:22.505498Z] Computed price context (heuristic) for pax=60",
+    "[2026-04-26T16:26:37.570591Z] realtime_task timed out after 15s",
+    "[2026-04-26T16:26:41.922194Z] Pre-gathered real-time data sanity: wiki=no; attractions=5; news=0",
+    "[2026-04-26T16:26:42.921773Z] Price context fetched: cities=['USA']",
+    "[2026-04-26T16:26:51.060545Z] Tavily: injected 1 city block(s) into prompt",
+    "[2026-04-26T16:26:51.063530Z] Recomputed price context with live data: mined=15 prices, hotel_source=live+heuristic (n=9)",
+    "[2026-04-26T16:26:51.065545Z] Injecting 2 KB document(s) into LLM prompt",
+    "[2026-04-26T16:26:51.079532Z] Calling LLM: model=llama3, base_url=http://localhost:11434",
+    "[2026-04-26T16:48:53.906645Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": {
+    "fields": {
+      "destination": "USA",
+      "destinations": [
+        "USA"
+      ],
+      "trip_start_date": "2026-11-30",
+      "checkin_date": "2026-11-30",
+      "total_nights": 8,
+      "nights": 8,
+      "duration": 9,
+      "pax": 60,
+      "adults": 60,
+      "hotel_type": "luxury",
+      "hotel_category": "5-Star",
+      "transport_preference": "Private coach",
+      "vehicle_type": "coach",
+      "guide_required": true,
+      "event_type": "leisure",
+      "client_type": "leisure",
+      "contact_person": "Meghana",
+      "raw_text": "Dear Meghana,\n \nGreetings !\n \nKindly note, we are working on a very prospective query for USA(03nts nyc+03nts vegas+02nts los Angeles) as per attached itinerary flow and below details. We request you to kindly go through the same and advise your suggestions  in the itinerary along with break up costing accordingly.\n \nNo of Pax: 55-60\nDates: 20th to 30th November\nDuration : 8 Nights & 9 Days(03nts nyc+03nts vegas+02nts los Angeles).\nHotel-5* on single occupancy with 02-03 Indian items at brfst with Masala chai if possible.\n \nMeals : High end Indian Restaurants with below configuration\no    Breakfast : Indian items to be made available at all breakfasts. At least 2 to 3 items / breakfast.\no    Lunch : 2+2 starters+02 desserts with free flow of beers ( Multiple beer options in all lunches. Beer Brands should change day wise )\no    Cocktail dinners : 3+3 starters with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Gala Dinner: 04+04 starters, main course with free flow of liquor ( Glen or above category brands. Minimum 2 hours and above / dinner ). Wine should be considered in package.\no    Menu : Should be curated day wise with no repetition of main course or starters. Secluded space to be considered at all venues for our group.\n \nApart from the attached itinerary suggestion, :\no    We will stick to the same and would also like to hear from you for any further suggestions if any.\no   We are looking forward to a night’s dinner in Los Angeles to be done at Recommended Michelin Star restaurant.\n \nPlease include the below services while you share the quote:\n·         Four 500 ml water bottles per person per day in all transfers as well as in the hotel room\n·         Please note the guide on ground should be an English speaking guide only\n·         FOC policy\n·         All tours and transfers to be in deluxe AC coach. \n \nThanks & Regards,",
+      "client_industry": "other",
+      "checkout_date": "2026-12-09"
+    }
+  },
+  "pending_formal_request": null,
+  "formal_request_detected": true
+}

@@ -175,11 +175,11 @@ export function generateItineraryPDF(itinerary) {
 // ── DayCard ────────────────────────────────────────────────────────────────────
 function DayCard({ day, isOpen, onToggle }) {
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-[#FFFCE6] transition-colors text-left"
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-[#33363d] hover:bg-[#FFFCE6] dark:hover:bg-white/5 transition-colors text-left"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="w-7 h-7 rounded-full bg-dark-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
@@ -187,25 +187,25 @@ function DayCard({ day, isOpen, onToggle }) {
           </span>
           <div className="min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-gray-800">
+              <span className="text-sm font-semibold text-gray-800 dark:text-white">
                 {day.city || `Day ${day.day}`}
               </span>
               {day.date && (
-                <span className="text-xs text-gray-400">{day.date}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-400">{day.date}</span>
               )}
             </div>
             {day.summary && (
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{day.summary}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-300 mt-0.5 truncate">{day.summary}</p>
             )}
           </div>
         </div>
         {isOpen
-          ? <ChevronUp  size={15} className="text-gray-400 flex-shrink-0" />
-          : <ChevronDown size={15} className="text-gray-400 flex-shrink-0" />}
+          ? <ChevronUp  size={15} className="text-gray-400 dark:text-gray-400 flex-shrink-0" />
+          : <ChevronDown size={15} className="text-gray-400 dark:text-gray-400 flex-shrink-0" />}
       </button>
 
       {isOpen && (
-        <div className="px-4 py-3.5 bg-white space-y-3 border-t border-gray-100">
+        <div className="px-4 py-3.5 bg-white dark:bg-[#3a3d44] space-y-3 border-t border-gray-100 dark:border-white/10 dark:border-white/10">
           {[["Morning", day.morning], ["Afternoon", day.afternoon], ["Evening", day.evening]]
             .filter(([, v]) => v)
             .map(([label, content]) => {
@@ -223,7 +223,7 @@ function DayCard({ day, isOpen, onToggle }) {
                   </span>
                   <ul className="mt-1 space-y-1">
                     {parts.map((line, i) => (
-                      <li key={i} className="text-sm text-gray-700 leading-relaxed">
+                      <li key={i} className="text-sm text-gray-700 dark:text-gray-100 leading-relaxed">
                         {line}
                       </li>
                     ))}
@@ -240,9 +240,9 @@ function DayCard({ day, isOpen, onToggle }) {
           )}
 
           {day.hotel?.name && (
-            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-              <Building2 size={12} className="text-gray-400 flex-shrink-0" />
-              <span className="text-xs text-gray-600">
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
+              <Building2 size={12} className="text-gray-400 dark:text-gray-400 flex-shrink-0" />
+              <span className="text-xs text-gray-600 dark:text-gray-200">
                 {day.hotel.name}
                 {day.hotel.area ? `, ${day.hotel.area}` : ""}
               </span>
@@ -320,9 +320,9 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
 
       {/* ── Itinerary Summary ── */}
       {(itinerary.itinerary_summary || itinerary.overview) && (
-        <div className="bg-gray-50 rounded-xl px-5 py-4 border border-gray-100">
-          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Itinerary Summary</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{itinerary.itinerary_summary || itinerary.overview}</p>
+        <div className="bg-gray-50 dark:bg-[#33363d] rounded-xl px-5 py-4 border border-gray-100 dark:border-white/10">
+          <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">Itinerary Summary</p>
+          <p className="text-sm text-gray-700 dark:text-gray-100 leading-relaxed">{itinerary.itinerary_summary || itinerary.overview}</p>
         </div>
       )}
 
@@ -330,21 +330,21 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
       {itinerary.days?.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">
               Day-by-Day Itinerary
             </p>
             <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => setExpandedDays(new Set(itinerary.days.map((d) => d.day)))}
-                className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                className="text-[10px] text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:text-gray-200 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
               >
                 Expand all
               </button>
               <button
                 type="button"
                 onClick={() => setExpandedDays(new Set())}
-                className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                className="text-[10px] text-gray-400 dark:text-gray-400 hover:text-gray-600 dark:text-gray-200 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
               >
                 Collapse all
               </button>
@@ -369,26 +369,26 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
           <button
             type="button"
             onClick={() => setShowCost((v) => !v)}
-            className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 hover:text-gray-700 transition-colors w-full text-left"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2 hover:text-gray-700 dark:text-gray-100 transition-colors w-full text-left"
           >
             Cost Breakdown
             {showCost ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
           {showCost && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
               {Object.entries(cb).map(([k, v], i) => {
                 const isTotal = k.includes("total") || k.includes("grand");
                 return (
                   <div
                     key={k}
                     className={`flex justify-between px-4 py-2.5 text-sm ${
-                      i % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      i % 2 === 0 ? "bg-white dark:bg-[#3a3d44]" : "bg-gray-50 dark:bg-[#33363d]"
                     } ${isTotal ? "font-semibold border-t-2 border-[#FFDE39] bg-[#FFFCE6]!" : ""}`}
                   >
-                    <span className={`capitalize ${isTotal ? "text-gray-900" : "text-gray-600"}`}>
+                    <span className={`capitalize ${isTotal ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-200"}`}>
                       {k.replace(/_/g, " ")}
                     </span>
-                    <span className={`font-medium ${isTotal ? "text-gray-900" : "text-gray-800"}`}>
+                    <span className={`font-medium ${isTotal ? "text-gray-900 dark:text-white" : "text-gray-800 dark:text-white"}`}>
                       {v}
                     </span>
                   </div>
@@ -402,27 +402,27 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
       {/* ── Hotels ── */}
       {hotels.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+          <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
             Hotel Options
           </p>
-          <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+          <div className="border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden divide-y divide-gray-100 dark:divide-white/10">
             {hotels.slice(0, 5).map((h, i) => {
               const price =
                 h.price_per_night_inr ||
                 h.price_per_night_in_inr ||
                 (h.price_per_night ? `${h.currency || ""} ${h.price_per_night}/night` : null);
               return (
-                <div key={i} className="flex justify-between items-center px-4 py-2.5 bg-white hover:bg-[#FFFCE6] transition-colors">
+                <div key={i} className="flex justify-between items-center px-4 py-2.5 bg-white dark:bg-[#3a3d44] hover:bg-[#FFFCE6] dark:hover:bg-white/5 transition-colors">
                   <div className="min-w-0">
-                    <span className="text-sm font-medium text-gray-800 truncate">{h.name}</span>
+                    <span className="text-sm font-medium text-gray-800 dark:text-white truncate">{h.name}</span>
                     {(h.city || h.area) && (
-                      <span className="text-xs text-gray-400 ml-2">
+                      <span className="text-xs text-gray-400 dark:text-gray-400 ml-2">
                         {[h.city, h.area].filter(Boolean).join(" · ")}
                       </span>
                     )}
                   </div>
                   {price && (
-                    <span className="text-xs text-gray-600 font-medium ml-3 flex-shrink-0">{price}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-200 font-medium ml-3 flex-shrink-0">{price}</span>
                   )}
                 </div>
               );
@@ -436,12 +436,12 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
         <div className="grid grid-cols-2 gap-4">
           {inclusions.length > 0 && (
             <div>
-              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+              <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
                 Inclusions
               </p>
               <ul className="space-y-1.5">
                 {inclusions.map((inc, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-gray-600 leading-relaxed">
+                  <li key={i} className="flex gap-2 text-xs text-gray-600 dark:text-gray-200 leading-relaxed">
                     <Check size={12} className="text-green-500 flex-shrink-0 mt-0.5" />
                     {inc}
                   </li>
@@ -451,12 +451,12 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
           )}
           {exclusions.length > 0 && (
             <div>
-              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+              <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
                 Exclusions
               </p>
               <ul className="space-y-1.5">
                 {exclusions.map((exc, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-gray-600 leading-relaxed">
+                  <li key={i} className="flex gap-2 text-xs text-gray-600 dark:text-gray-200 leading-relaxed">
                     <Minus size={12} className="text-red-400 flex-shrink-0 mt-0.5" />
                     {exc}
                   </li>
@@ -470,12 +470,12 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
       {/* ── Guidelines ── */}
       {guidelines.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+          <p className="text-[11px] font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
             Important Guidelines
           </p>
           <ul className="space-y-1.5">
             {guidelines.map((g, i) => (
-              <li key={i} className="flex gap-2 text-xs text-gray-600 leading-relaxed">
+              <li key={i} className="flex gap-2 text-xs text-gray-600 dark:text-gray-200 leading-relaxed">
                 <AlertCircle size={12} className="text-amber-400 flex-shrink-0 mt-0.5" />
                 {g}
               </li>
@@ -486,13 +486,13 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
 
       {/* ── Notes ── */}
       {itinerary.notes && (
-        <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-3">
+        <p className="text-xs text-gray-500 dark:text-gray-300 italic border-l-2 border-gray-200 dark:border-white/15 pl-3">
           {itinerary.notes}
         </p>
       )}
 
       {/* ── Action bar ── */}
-      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+      <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
         {saved ? (
           <>
             <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
@@ -502,7 +502,7 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
             <button
               type="button"
               onClick={() => generateItineraryPDF(itinerary)}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-200 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 px-3 py-2 rounded-lg transition-colors"
             >
               <Download size={13} /> Download PDF
             </button>
@@ -512,7 +512,7 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
             <button
               type="button"
               onClick={() => generateItineraryPDF(itinerary)}
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-200 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 px-3 py-2 rounded-lg transition-colors"
             >
               <Download size={13} /> Download PDF
             </button>

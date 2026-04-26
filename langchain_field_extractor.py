@@ -76,6 +76,29 @@ class TripFields(BaseModel):
         None,
         description="Meal preference: vegetarian, vegan, halal, kosher, no preference. Null otherwise.",
     )
+    # ── LLM-planned web research queries ──────────────────────────────────
+    # The model proposes the most useful real-world search queries given the
+    # user's exact request. Downstream, these queries drive Tavily web searches
+    # so the itinerary uses live data the LLM itself decided was relevant —
+    # not just a generic "{city} attractions" template.
+    search_queries: Optional[List[str]] = Field(
+        None,
+        description=(
+            "3-5 specific, useful web search queries to gather live data for THIS trip. "
+            "Tailor to the user's actual request — e.g. for an anniversary in Goa add "
+            "'romantic dinner spots Goa', 'best beaches for couples Goa'; for a Singapore "
+            "MICE trip add 'top venues for corporate offsite Singapore', 'Marina Bay Sands "
+            "ballroom rates'. Each query should be a real Google-style search string."
+        ),
+    )
+    must_visit_landmarks: Optional[List[str]] = Field(
+        None,
+        description="Specific landmarks/venues the user explicitly named (e.g. 'Marina Bay Sands SkyPark', 'Universal Studios', 'Ferrari World'). Null if none.",
+    )
+    special_requirements: Optional[List[str]] = Field(
+        None,
+        description="Any special needs/notes from the request: 'senior-friendly', 'wheelchair access', 'prayer space', '50th wedding anniversary', etc. Null if none.",
+    )
 
 
 _SYSTEM_PROMPT = (

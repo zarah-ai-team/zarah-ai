@@ -58,11 +58,53 @@ def google_destination_info(destination: str) -> Dict[str, Any]:
     return info
 
 # ============ WIKIPEDIA SEARCH (Free) ============
+# Wikimedia Foundation's User-Agent policy requires a descriptive UA with a
+# reachable contact (URL or email). Without it the API returns 403 Forbidden.
+# Spec: https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+_WIKI_REQUESTS_VER = getattr(requests, "__version__", "2")
+_WIKI_PROJECT_URL = os.getenv(
+    "WIKI_CONTACT_URL",
+    "https://github.com/zarah-ai-team/zarah-ai",
+)
+_WIKI_CONTACT_EMAIL = os.getenv("WIKI_CONTACT_EMAIL", "")
+_WIKI_CONTACT_BLOCK = (
+    f"{_WIKI_PROJECT_URL}; {_WIKI_CONTACT_EMAIL}"
+    if _WIKI_CONTACT_EMAIL else _WIKI_PROJECT_URL
+)
+_WIKI_DEFAULT_UA = (
+    f"ZarahAI-TravelChatbot/1.0 ({_WIKI_CONTACT_BLOCK}) "
+    f"python-requests/{_WIKI_REQUESTS_VER}"
+)
+_WIKI_HEADERS = {
+    "User-Agent":     os.getenv("WIKI_USER_AGENT", _WIKI_DEFAULT_UA),
+    "Api-User-Agent": os.getenv("WIKI_USER_AGENT", _WIKI_DEFAULT_UA),
+    "Accept":         "application/json",
+}
+
+
+def _is_searchable_query(q: str) -> bool:
+    """Reject queries Wikipedia is guaranteed to 403 on (overly long, full
+    sentences with punctuation, etc.)."""
+    if not q or not isinstance(q, str):
+        return False
+    q = q.strip()
+    if not q or len(q) > 120:    # Wikipedia's API rejects long URLs
+        return False
+    if any(ch in q for ch in ".!?"):
+        return False
+    if len(q.split()) > 6:        # genuine destinations are 1-3 words
+        return False
+    return True
+
+
 def search_wikipedia(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
     Search Wikipedia for articles related to query.
-    No API key required - uses public Wikipedia API.
+    Uses the public Wikipedia API with a policy-compliant User-Agent header.
     """
+    if not _is_searchable_query(query):
+        logger.debug("Skipping wikipedia search for unsuitable query: %r", query)
+        return []
     try:
         url = "https://en.wikipedia.org/w/api.php"
         params = {
@@ -70,9 +112,9 @@ def search_wikipedia(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             'list': 'search',
             'srsearch': query,
             'format': 'json',
-            'srlimit': limit
+            'srlimit': limit,
         }
-        r = requests.get(url, params=params, timeout=5)
+        r = requests.get(url, params=params, headers=_WIKI_HEADERS, timeout=8)
         r.raise_for_status()
         results = r.json().get('query', {}).get('search', [])
         return [{'title': r['title'], 'snippet': r['snippet']} for r in results]
@@ -84,11 +126,11 @@ def search_wikipedia(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 def get_wikipedia_summary(title: str) -> Dict[str, Any]:
     """
     Get detailed summary of a Wikipedia article.
-    No API key required - uses public REST API.
+    Uses the public REST API with the same UA headers as the search endpoint.
     """
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title)}"
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, headers=_WIKI_HEADERS, timeout=8)
         r.raise_for_status()
         data = r.json()
         return {
@@ -96,7 +138,7 @@ def get_wikipedia_summary(title: str) -> Dict[str, Any]:
             'description': data.get('description'),
             'extract': data.get('extract'),
             'image': data.get('thumbnail', {}).get('source'),
-            'url': data.get('content_urls', {}).get('desktop', {}).get('page')
+            'url': data.get('content_urls', {}).get('desktop', {}).get('page'),
         }
     except Exception as e:
         logger.error(f"Wikipedia summary failed: {e}")

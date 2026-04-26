@@ -1,0 +1,42 @@
+{
+  "session_id": "0044dee1-53a6-4374-98ee-bdbadc94f162",
+  "username": "admin",
+  "chat_name": "Summarize key inclusions and exclusions for t…",
+  "name_auto": false,
+  "created_at": "2026-04-26T15:30:04.752271Z",
+  "updated_at": "2026-04-26T15:30:04.880891Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "Oman Trip"
+  },
+  "fields": {
+    "destination": "Oman",
+    "destinations": [
+      "Oman",
+      "UAE"
+    ],
+    "route": "Oman → UAE",
+    "destination_kind": "country",
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Summarize key inclusions and exclusions for this Oman & UAE itinerary"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Oman. How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T15:30:04.750269Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

@@ -1,0 +1,21 @@
+{
+  "session_id": "40c296c9-673e-4771-90ef-342c600dcff6",
+  "username": "admin",
+  "chat_name": "New Itinerary",
+  "created_at": "2026-04-26T15:59:13.806051Z",
+  "updated_at": "2026-04-26T15:59:13.806051Z",
+  "metadata": {
+    "itinerary_name": "",
+    "group_client_name": "",
+    "travel_dates": "",
+    "travelers_max": 0,
+    "duration": "",
+    "estimated_cost": "",
+    "status": "draft"
+  },
+  "fields": {},
+  "history": [],
+  "sanity_checks": [],
+  "last_llm_raw": null,
+  "last_llm_prompt": null
+}

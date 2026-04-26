@@ -29,6 +29,20 @@ html, body, *, *::before, *::after {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Dark-mode toggle: when ThemeContext flips themes it briefly adds
+   `.theme-switching` to <html>. While that class is on, every coloured
+   surface uses a slower, gentler easing curve so the whole UI fades from
+   one palette to the other instead of snapping. */
+html.theme-switching,
+html.theme-switching body,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
+  transition-duration: 600ms !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
 /* Dark mode — cool neutral charcoal, lighter and smoother than near-black.
    Pairs well with the brand yellow accents instead of being overpowered by them. */
 html.dark body {
@@ -44,6 +58,58 @@ html.dark ::-webkit-scrollbar-thumb {
 }
 html.dark ::-webkit-scrollbar-thumb:hover {
   background: #6a6e76;
+}
+
+/* Force the saved-itinerary modal to render as if we were in light mode,
+   even when the rest of the app is in dark mode. The user wants the
+   itinerary card to read as black-on-white in both themes. */
+.itinerary-modal-light,
+.itinerary-modal-light * {
+  --tw-text-opacity: 1 !important;
+}
+.itinerary-modal-light {
+  background-color: #ffffff !important;
+  color: #1f1f1f !important;
+}
+html.dark .itinerary-modal-light h1,
+html.dark .itinerary-modal-light h2,
+html.dark .itinerary-modal-light h3,
+html.dark .itinerary-modal-light h4,
+html.dark .itinerary-modal-light p,
+html.dark .itinerary-modal-light span,
+html.dark .itinerary-modal-light li,
+html.dark .itinerary-modal-light label,
+html.dark .itinerary-modal-light a,
+html.dark .itinerary-modal-light button:not([class*="bg-"]) {
+  color: #1f1f1f !important;
+}
+/* Brand-yellow accents stay yellow inside the modal */
+html.dark .itinerary-modal-light .text-\[\#FFDE39\],
+html.dark .itinerary-modal-light .text-\[\#FBEC5D\],
+html.dark .itinerary-modal-light .text-\[\#E6C800\],
+html.dark .itinerary-modal-light .text-\[\#8A6800\] {
+  color: revert !important;
+}
+/* Soft secondary text becomes mid-gray instead of pure black */
+html.dark .itinerary-modal-light .text-gray-500,
+html.dark .itinerary-modal-light .text-gray-400 {
+  color: #6b7280 !important;
+}
+/* Force panels/rows back to white/light backgrounds in dark theme */
+html.dark .itinerary-modal-light .bg-white,
+html.dark .itinerary-modal-light [class*="dark\:bg-\[\#3a3d44\]"] {
+  background-color: #ffffff !important;
+}
+html.dark .itinerary-modal-light .bg-gray-50,
+html.dark .itinerary-modal-light [class*="dark\:bg-\[\#33363d\]"] {
+  background-color: #f9fafb !important;
+}
+html.dark .itinerary-modal-light .bg-gray-100,
+html.dark .itinerary-modal-light [class*="dark\:bg-white\/10"] {
+  background-color: #f3f4f6 !important;
+}
+html.dark .itinerary-modal-light [class*="dark\:border-white"] {
+  border-color: #e5e7eb !important;
 }
 
 button,

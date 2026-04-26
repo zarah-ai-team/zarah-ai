@@ -60,6 +60,20 @@ class LocalLLMClient:
             return self._generate_native(system_prompt, messages, model, num_ctx, num_predict)
         return self._generate_openai(system_prompt, messages, model, num_ctx, num_predict)
 
+    def is_available(self, timeout: float = 2.0) -> bool:
+        """
+        Fast health check. Returns True if Ollama responds to GET /api/tags
+        within `timeout` seconds. Use this before kicking off a long generation
+        so the frontend gets an immediate error instead of waiting on a stuck
+        connection.
+        """
+        try:
+            r = requests.get(f"{self.base_url}/api/tags", timeout=timeout)
+            return r.status_code == 200
+        except Exception as e:
+            self.logger.debug("Ollama health check failed: %s", e)
+            return False
+
     def _generate_native(self, system_prompt: str, messages: List[Dict], model: str,
                          num_ctx: int, num_predict: int) -> str:
         """Ollama native /api/chat — most reliable for local instances."""

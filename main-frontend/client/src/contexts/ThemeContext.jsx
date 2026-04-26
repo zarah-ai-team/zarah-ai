@@ -25,6 +25,14 @@ export function ThemeProvider({ children }) {
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
+    // Add a transient class so colour transitions become noticeably smoother
+    // ONLY during the toggle — hover/click transitions stay snappy.
+    const root = document.documentElement;
+    root.classList.add("theme-switching");
+    window.clearTimeout(toggleTheme._t);
+    toggleTheme._t = window.setTimeout(() => {
+      root.classList.remove("theme-switching");
+    }, 700);
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   }, []);
 

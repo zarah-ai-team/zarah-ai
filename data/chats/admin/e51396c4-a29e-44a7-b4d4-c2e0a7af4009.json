@@ -1,0 +1,84 @@
+{
+  "session_id": "e51396c4-a29e-44a7-b4d4-c2e0a7af4009",
+  "username": "admin",
+  "chat_name": "create an itienary for 7 nihts 8 days to lonf…",
+  "name_auto": false,
+  "created_at": "2026-04-26T15:01:10.701475Z",
+  "updated_at": "2026-04-26T15:01:32.678792Z",
+  "metadata": {
+    "status": "in_progress",
+    "duration": "8",
+    "itinerary_name": "London Trip",
+    "travelers_max": 20
+  },
+  "fields": {
+    "duration": 8,
+    "budget_per_person": 400000.0,
+    "budget_currency": "INR",
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other",
+    "destination": "London",
+    "destination_kind": "city",
+    "pax": 20,
+    "event_type": "leisure"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "create an itienary for 7 nihts 8 days to lonfon under 400000 inr"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — 8 nights. Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country."
+    },
+    {
+      "role": "user",
+      "content": "London"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to London, 8 nights. How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults."
+    },
+    {
+      "role": "user",
+      "content": "20"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to London, 20 travellers, 8 nights. What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation."
+    },
+    {
+      "role": "user",
+      "content": "Leisure"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: London\nDuration: 8 nights / 9 days\nPax: 20 adults\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T15:01:10.188991Z] Conversational mode: progressive field collector",
+    "[2026-04-26T15:01:19.561507Z] Conversational mode: progressive field collector",
+    "[2026-04-26T15:01:24.119583Z] Conversational mode: progressive field collector",
+    "[2026-04-26T15:01:32.353872Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": {
+    "fields": {
+      "duration": 8,
+      "budget_per_person": 400000.0,
+      "budget_currency": "INR",
+      "hotel_type": "mid-range",
+      "client_type": "leisure",
+      "client_industry": "other",
+      "destination": "London",
+      "destination_kind": "city",
+      "pax": 20,
+      "event_type": "leisure"
+    }
+  },
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

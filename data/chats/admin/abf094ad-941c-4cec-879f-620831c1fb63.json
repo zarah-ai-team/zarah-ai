@@ -1,0 +1,109 @@
+{
+  "session_id": "abf094ad-941c-4cec-879f-620831c1fb63",
+  "username": "admin",
+  "chat_name": "Hi Yash,\n \nAs discussed, kindly share the details …",
+  "name_auto": true,
+  "created_at": "2026-04-26T16:06:35.632469Z",
+  "updated_at": "2026-04-26T16:07:31.187845Z",
+  "metadata": {
+    "status": "draft",
+    "travelers_max": 18,
+    "duration": "4"
+  },
+  "fields": {
+    "total_nights": 3,
+    "nights": 3,
+    "duration": 4,
+    "pax": 18,
+    "adults": 18,
+    "event_type": "corporate",
+    "client_type": "corporate",
+    "raw_text": "Hi Yash,\n \nAs discussed, kindly share the details for experiential itinerary for upcoming small group in the month of Oct, mentioned below are the details :\n \nDestination                    ;              Barcelona\nNo. of pax                        :              18\nHotel                                 :              Client is going to be booking the hotel directly\nDates                                 :              7th – 10th Oct 2026\nProfile                               :              Senior leadership of corporate\n \nWe would require 03 nights itinerary which will involve activities / experiences etc. Few of them we are listing below that can be added but open to suggestions\nHot air ballooning ( if that possible in Oct )\nTreasure hunt at SAGRADA FAMILI\ncable car ride from the bottom of Montjuïc hill to Montjuïc Castle viewpoint\nFootball match for 18pax at any turf’s in Barcelona\nLunch at Yatch\nBar Hopping\nFlamingo show with dinner\n \nLook forward to get the itinerary by EOD if possible.\n \nRegards"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Hi Yash,\n \nAs discussed, kindly share the details for experiential itinerary for upcoming small group in the month of Oct, mentioned below are the details :\n \nDestination                    ;              Barcelona\nNo. of pax                        :              18\nHotel                                 :              Client is going to be booking the hotel directly\nDates                                 :              7th – 10th Oct 2026\nProfile                               :              Senior leadership of corporate\n \nWe would require 03 nights itinerary which will involve activities / experiences etc. Few of them we are listing below that can be added but open to suggestions\nHot air ballooning ( if that possible in Oct )\nTreasure hunt at SAGRADA FAMILI\ncable car ride from the bottom of Montjuïc hill to Montjuïc Castle viewpoint\nFootball match for 18pax at any turf’s in Barcelona\nLunch at Yatch\nBar Hopping\nFlamingo show with dinner\n \nLook forward to get the itinerary by EOD if possible.\n \nRegards"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    },
+    {
+      "role": "user",
+      "content": "Barcelona"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    },
+    {
+      "role": "user",
+      "content": "Maldives"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    },
+    {
+      "role": "user",
+      "content": "Europe Multi-City"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    },
+    {
+      "role": "user",
+      "content": "Bali / Indonesia"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    },
+    {
+      "role": "user",
+      "content": "Abu Dhabi"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Pax: 18\n  - Nights: 3\n\nTo build the itinerary, could you please tell me the **destination(s) / cities to visit**?"
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T16:06:35.630464Z] Detected formal request format; extracting all fields and generating itinerary",
+    "[2026-04-26T16:06:35.631468Z] Formal parsed: destinations=None nights=3 pax=18",
+    "[2026-04-26T16:06:35.631468Z] Formal request missing fields: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]",
+    "[2026-04-26T16:06:45.799571Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:06:45.800569Z] Follow-up merged; pax=18 dest=None nights=3",
+    "[2026-04-26T16:06:45.801580Z] Still missing after follow-up: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]",
+    "[2026-04-26T16:07:25.688074Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:07:25.688074Z] Follow-up merged; pax=18 dest=None nights=3",
+    "[2026-04-26T16:07:25.689074Z] Still missing after follow-up: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]",
+    "[2026-04-26T16:07:28.725954Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:07:28.726951Z] Follow-up merged; pax=18 dest=None nights=3",
+    "[2026-04-26T16:07:28.727960Z] Still missing after follow-up: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]",
+    "[2026-04-26T16:07:29.826896Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:07:29.827883Z] Follow-up merged; pax=18 dest=None nights=3",
+    "[2026-04-26T16:07:29.827883Z] Still missing after follow-up: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]",
+    "[2026-04-26T16:07:31.103287Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T16:07:31.104291Z] Follow-up merged; pax=18 dest=None nights=3",
+    "[2026-04-26T16:07:31.104291Z] Still missing after follow-up: ['destination(s) / cities to visit', \"trip start date (e.g. '15 March 2026')\"]"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": {
+    "partial_fields": {
+      "total_nights": 3,
+      "nights": 3,
+      "duration": 4,
+      "pax": 18,
+      "adults": 18,
+      "event_type": "corporate",
+      "client_type": "corporate",
+      "raw_text": "Hi Yash,\n \nAs discussed, kindly share the details for experiential itinerary for upcoming small group in the month of Oct, mentioned below are the details :\n \nDestination                    ;              Barcelona\nNo. of pax                        :              18\nHotel                                 :              Client is going to be booking the hotel directly\nDates                                 :              7th – 10th Oct 2026\nProfile                               :              Senior leadership of corporate\n \nWe would require 03 nights itinerary which will involve activities / experiences etc. Few of them we are listing below that can be added but open to suggestions\nHot air ballooning ( if that possible in Oct )\nTreasure hunt at SAGRADA FAMILI\ncable car ride from the bottom of Montjuïc hill to Montjuïc Castle viewpoint\nFootball match for 18pax at any turf’s in Barcelona\nLunch at Yatch\nBar Hopping\nFlamingo show with dinner\n \nLook forward to get the itinerary by EOD if possible.\n \nRegards"
+    }
+  },
+  "formal_request_detected": false
+}

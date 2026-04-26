@@ -1,0 +1,82 @@
+{
+  "title": "Golden Jubilee UAE Getaway",
+  "destination": "UAE",
+  "duration_days": 3,
+  "pax": 10,
+  "event_type": "leisure",
+  "itinerary_summary": "Join us on a luxurious 3-day getaway in the UAE to celebrate your golden jubilee. Experience the vibrant culture, stunning architecture, and world-class attractions of this iconic destination. Enjoy fine dining, romantic sunset cruises, and thrilling Ferrari World adventures. This trip is designed to indulge your senses and create lifelong memories with loved ones.",
+  "days": [
+    {
+      "day": 1,
+      "city": "Dubai",
+      "date": "Wed, 30 Mar 2026",
+      "summary": "Desert Safari & Luxe Dining",
+      "morning": "07:30 – Breakfast at Cafe Arabica, Downtown Dubai (International buffet, INR 2,500 per person). 09:00 – Depart hotel by private sedan (approx 1 hour drive). 10:00 – Arrive at Desert Safari Camp; enjoy dune bashing and camel ride (INR 3,000 per person). 13:30 – Lunch at Al Hadheer Restaurant, Dubai Marina (Emirati cuisine, INR 2,000 per person). 15:30 – Relaxation time at the camp. 19:00 – Return transfer to hotel.",
+      "afternoon": "14:00 – Transfer to Palm Jumeirah (approx 1 hour drive). 15:00 – Visit The Dubai Yacht; enjoy stunning views of the city skyline (INR 2,000 per person). 17:30 – Walk to Atlantis, The Palm for a leisurely stroll. 19:30 – Return transfer to hotel.",
+      "evening": "20:30 – Depart for Burj Khalifa; enjoy sunset view from Level 124 (INR 1,500 per person). 22:00 – Dinner at Zaytinya, Downtown Dubai (Mediterranean cuisine, INR 3,000 per person). 23:30 – Return transfer to hotel.",
+      "transport_note": "Private sedan for the full day (INR 19,500)",
+      "hotel": {
+        "name": "The Address Downtown Dubai",
+        "area": "Downtown Dubai",
+        "category": "5-Star Deluxe"
+      }
+    },
+    {
+      "day": 2,
+      "city": "Dubai",
+      "date": "Thu, 31 Mar 2026",
+      "summary": "Ferrari World & Luxe Dining",
+      "morning": "08:00 – Breakfast at Levain Bakery, Downtown Dubai (French-inspired pastries, INR 1,500 per person). 09:30 – Depart hotel by private sedan (approx 1 hour drive). 10:30 – Arrive at Ferrari World Abu Dhabi; enjoy thrill rides and attractions (INR 4,000 per person). 13:00 – Lunch at The Italian Kitchen, Yas Marina (Italian cuisine, INR 2,500 per person). 15:00 – Continue exploring the park. 18:00 – Return transfer to hotel.",
+      "afternoon": "14:30 – Transfer to Dubai Mall (approx 1 hour drive). 15:30 – Visit The Dubai Fountain Show; enjoy the world's largest choreographed fountain system (INR 500 per person). 17:30 – Walk to Souk Al Bahar for a leisurely stroll. 19:00 – Return transfer to hotel.",
+      "evening": "20:00 – Depart for Armani/Ristorante, Downtown Dubai (Italian cuisine, INR 3,500 per person). 22:00 – Enjoy a romantic dinner with stunning city views. 23:30 – Return transfer to hotel.",
+      "transport_note": "Private sedan for the full day (INR 19,500)",
+      "hotel": {
+        "name": "The Address Downtown Dubai",
+        "area": "Downtown Dubai",
+        "category": "5-Star Deluxe"
+      }
+    },
+    {
+      "day": 3,
+      "city": "Dubai",
+      "date": "Fri, 01 Apr 2026",
+      "summary": "Desert Safari & Farewell Dinner",
+      "morning": "07:30 – Breakfast at The Cafe, Downtown Dubai (International buffet, INR 2,000 per person). 09:00 – Depart hotel by private sedan (approx 1 hour drive). 10:00 – Arrive at Desert Safari Camp; enjoy dune bashing and camel ride (INR 3,000 per person). 13:30 – Lunch at Al Hadheer Restaurant, Dubai Marina (Emirati cuisine, INR 2,000 per person). 15:30 – Relaxation time at the camp. 19:00 – Return transfer to hotel.",
+      "afternoon": "14:00 – Transfer to Palm Jumeirah (approx 1 hour drive). 15:00 – Visit The Dubai Yacht; enjoy stunning views of the city skyline (INR 2,000 per person). 17:30 – Walk to Atlantis, The Palm for a leisurely stroll. 19:30 – Return transfer to hotel.",
+      "evening": "20:30 – Depart for a farewell dinner at Rhodes W1, Downtown Dubai (Mediterranean cuisine, INR 3,500 per person). 22:00 – Enjoy a romantic evening with loved ones. 23:30 – Return transfer to hotel.",
+      "transport_note": "Private sedan for the full day (INR 19,500)",
+      "hotel": {
+        "name": "The Address Downtown Dubai",
+        "area": "Downtown Dubai",
+        "category": "5-Star Deluxe"
+      }
+    }
+  ],
+  "hotels": [],
+  "cost_breakdown": {
+    "accommodation": "INR 54,000 (2 nights)",
+    "transport": "INR 58,500 (private sedan for all days)",
+    "meals": "INR 24,000 (breakfasts and dinners included)",
+    "sightseeing_and_activities": "INR 18,000 (Desert Safari, Ferrari World, and other attractions)",
+    "guide_fees": "INR 0",
+    "miscellaneous": "INR 5,000 (souvenirs and tips)",
+    "grand_total_per_person": "INR 50,000",
+    "grand_total_group": "INR 500,000"
+  },
+  "inclusions": [
+    "Accommodation as per plan",
+    "Private sedan with driver for all transfers"
+  ],
+  "exclusions": [
+    "International/domestic airfare",
+    "Visa fees",
+    "Travel insurance",
+    "Meals not mentioned",
+    "Personal expenses",
+    "Tips and gratuities"
+  ],
+  "important_guidelines": [
+    "Carry valid passport/ID at all times"
+  ],
+  "notes": "This trip is designed to provide a luxurious and relaxing experience for the couple. Please note that the costs are estimates and may vary based on actual usage."
+}

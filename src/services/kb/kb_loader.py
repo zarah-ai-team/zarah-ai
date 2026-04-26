@@ -41,6 +41,21 @@ class KBLoader:
             logger.error(f"KB load failed: {e}")
             return False
 
+    def reload_docs(self) -> int:
+        """
+        Re-scan data/itineraries/ (including the saved/ subdir) without
+        touching the Excel dataset or pricing rules. Called after a user saves
+        a new itinerary so the next request can use it as KB context.
+        Returns the new doc count.
+        """
+        try:
+            self._docs = []
+            self._load_docs()
+            logger.info(f"KB docs reloaded | docs: {len(self._docs)}")
+        except Exception as e:
+            logger.error(f"KB docs reload failed: {e}")
+        return len(self._docs)
+
     @property
     def dataset(self) -> pd.DataFrame:
         return self._dataset if self._dataset is not None else pd.DataFrame()
@@ -75,13 +90,18 @@ class KBLoader:
                 return
         except Exception:
             return
-        for f in ITINERARIES_DIR.iterdir():
+        # Recursively load every itinerary file (PDFs, XLSX, DOCX) AND every
+        # saved itinerary JSON dropped into data/itineraries/saved/ so the KB
+        # learns from BOTH historical exports and itineraries the user has
+        # generated and saved through the UI.
+        for f in ITINERARIES_DIR.rglob("*"):
             try:
                 if not f.is_file():
                     continue
                 text = _extract_text(f)
                 if isinstance(text, str) and text.strip():
-                    self._docs.append({"filename": f.name, "text": text, "ext": f.suffix.lower()})
+                    rel = f.relative_to(ITINERARIES_DIR)
+                    self._docs.append({"filename": str(rel), "text": text, "ext": f.suffix.lower()})
             except Exception as e:
                 logger.warning(f"Skipping {f.name}: {e}")
 
@@ -196,9 +216,51 @@ def _extract_text(path: Path) -> str:
             return df.to_string()[:_MAX_DOC_CHARS]
         except Exception:
             return ""
-    if ext == ".txt":
+    if ext == ".txt" or ext == ".md":
         return path.read_text(encoding="utf-8", errors="ignore")[:_MAX_DOC_CHARS]
+    if ext == ".json":
+        # Saved itinerary JSON dumps — flatten the structure into a readable
+        # text block so the KB retriever can match on it.
+        try:
+            import json as _json
+            data = _json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+            return _flatten_itinerary_json(data)[:_MAX_DOC_CHARS]
+        except Exception:
+            return path.read_text(encoding="utf-8", errors="ignore")[:_MAX_DOC_CHARS]
     return ""
+
+
+def _flatten_itinerary_json(data) -> str:
+    """Render a saved-itinerary dict as plain prose for KB indexing."""
+    if not isinstance(data, dict):
+        return str(data)[:8000]
+    parts = []
+    for k in ("title", "destination", "duration_days", "pax", "event_type",
+              "trip_start_date", "itinerary_summary", "overview"):
+        v = data.get(k)
+        if v:
+            parts.append(f"{k}: {v}")
+    cb = data.get("cost_breakdown") or {}
+    for k, v in cb.items():
+        if v:
+            parts.append(f"cost_{k}: {v}")
+    for d in (data.get("days") or []):
+        if not isinstance(d, dict):
+            continue
+        parts.append(
+            f"Day {d.get('day','')} ({d.get('city','')}, {d.get('date','')}): "
+            f"{d.get('summary','')} | morning: {d.get('morning','')[:200]} "
+            f"| afternoon: {d.get('afternoon','')[:200]} "
+            f"| evening: {d.get('evening','')[:200]} "
+            f"| transport: {d.get('transport_note','')[:120]} "
+            f"| hotel: {(d.get('hotel') or {}).get('name','')}"
+        )
+    for h in (data.get("hotels") or []):
+        if isinstance(h, dict):
+            parts.append(f"Hotel {h.get('city','')}: {h.get('name','')} ({h.get('category','')}) — {h.get('price_per_night_inr','')}")
+    for line in (data.get("inclusions") or []):
+        parts.append(f"included: {line}")
+    return "\n".join(parts)
 
 
 # Singleton
