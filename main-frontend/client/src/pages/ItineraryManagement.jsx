@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
@@ -15,8 +15,41 @@ import {
   Eye,
   X,
 } from "lucide-react";
-import { listChats, createChat, deleteChat, getChatSession } from "../services/chatService";
+import { listChats, createChat, deleteChat, getChatSession, updateChatMetadata } from "../services/chatService";
 import ItineraryDisplay, { generateItineraryPDF } from "../components/chat/ItineraryDisplay";
+import PortalMenu from "../components/common/PortalMenu";
+
+/** Per-row action menu using PortalMenu so it isn't clipped by the table's overflow-hidden. */
+function RowActionMenu({ open, onToggle, onClose, items }) {
+  const triggerRef = useRef(null);
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={onToggle}
+        className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-all duration-200"
+        aria-label="Actions"
+      >
+        <MoreVertical size={14} />
+      </button>
+      <PortalMenu open={open} anchorRef={triggerRef} onClose={onClose} width={172}>
+        {items.map((it, i) => (
+          <button
+            key={i}
+            onClick={() => { it.onClick(); onClose(); }}
+            className={`w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] transition-colors ${
+              it.danger
+                ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                : "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5"
+            }`}
+          >
+            {it.icon}{it.label}
+          </button>
+        ))}
+      </PortalMenu>
+    </>
+  );
+}
 
 const iconMap = {
   "clipboard-list": ClipboardList,
@@ -36,24 +69,41 @@ function formatDateRange(iso) {
   }
 }
 
+// Status keys stored in backend ↔ user-facing label.
+// "saved" is the default state right after the user clicks Save Itinerary.
 const STATUS_LABEL = {
-  draft: "Draft",
-  in_progress: "Active",
-  completed: "Completed",
-  cancelled: "Completed",
+  saved:        "Saved",
+  not_started:  "Not Started",
+  in_progress:  "In Progress",
+  completed:    "Completed",
+  // Legacy backward-compat
+  draft:        "Saved",
+  cancelled:    "Completed",
 };
+
+// Options shown in the dropdown — keys are what we send back to the backend.
+const STATUS_OPTIONS = [
+  { value: "saved",       label: "Saved",       color: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300" },
+  { value: "not_started", label: "Not Started", color: "bg-gray-100  text-gray-700  dark:bg-white/10 dark:text-gray-200" },
+  { value: "in_progress", label: "In Progress", color: "bg-blue-100  text-blue-800  dark:bg-blue-500/20 dark:text-blue-200" },
+  { value: "completed",   label: "Completed",   color: "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-200" },
+];
+
+const STATUS_KEY_BY_LABEL = Object.fromEntries(STATUS_OPTIONS.map((o) => [o.label, o.value]));
 
 function normalizeSession(s) {
   const meta = s.metadata || {};
+  const statusKey = meta.status || s.status || "saved";
   return {
     id: s.session_id ?? s.id,
-    name: s.chat_name || s.name || `Session ${s.session_id ?? s.id}`,
+    name: meta.itinerary_name || s.chat_name || s.name || `Session ${s.session_id ?? s.id}`,
     group: meta.group_client_name || s.client_name || s.group || "—",
     travelDates: meta.travel_dates || s.travel_dates || (s.created_at ? formatDateRange(s.created_at) : "—"),
     travelers: meta.travelers_max ? `${meta.travelers_max} pax` : (s.travelers || (s.adults ? `${s.adults} Adults` : "—")),
     duration: meta.duration || s.duration || (s.total_nights ? `${s.total_nights} Nights` : "—"),
     estimatedCost: meta.estimated_cost || s.estimated_cost || s.total_cost || "—",
-    status: STATUS_LABEL[meta.status] || STATUS_LABEL[s.status] || "Active",
+    statusKey,
+    status: STATUS_LABEL[statusKey] || "Saved",
     sessionId: s.session_id ?? s.id,
     hasItinerary: s.has_saved_itinerary || false,
   };
@@ -77,7 +127,10 @@ const ItineraryManagement = () => {
     try {
       const data = await listChats();
       const list = Array.isArray(data) ? data : (data.chats ?? data.sessions ?? []);
-      setSessions(list.map(normalizeSession));
+      // Only show chats whose itinerary the user has explicitly saved.
+      // Plain conversations stay in chat history and don't appear here.
+      const saved = list.filter((s) => s.has_saved_itinerary);
+      setSessions(saved.map(normalizeSession));
     } catch {
       // keep previous list on error
     } finally {
@@ -89,9 +142,9 @@ const ItineraryManagement = () => {
 
   const stats = useMemo(() => [
     { id: 1, label: "Total Itineraries", value: sessions.length, icon: "clipboard-list", bg: "#FFFAC5" },
-    { id: 2, label: "Active", value: sessions.filter((s) => s.status === "Active").length, icon: "file-check", bg: "#FFFAC5" },
-    { id: 3, label: "Drafts", value: sessions.filter((s) => s.status === "Draft").length, icon: "file-edit", bg: "#FFFAC5" },
-    { id: 4, label: "Completed", value: sessions.filter((s) => s.status === "Completed").length, icon: "check-circle", bg: "#FFFAC5" },
+    { id: 2, label: "Saved",       value: sessions.filter((s) => s.statusKey === "saved").length,       icon: "file-edit",  bg: "#FFFAC5" },
+    { id: 3, label: "In Progress", value: sessions.filter((s) => s.statusKey === "in_progress").length, icon: "file-check", bg: "#FFFAC5" },
+    { id: 4, label: "Completed",   value: sessions.filter((s) => s.statusKey === "completed").length,   icon: "check-circle", bg: "#FFFAC5" },
   ], [sessions]);
 
   const filtered = useMemo(() =>
@@ -123,6 +176,23 @@ const ItineraryManagement = () => {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
       alert("Delete failed: " + (err.message || "Unknown error"));
+    }
+  };
+
+  const handleStatusChange = async (sessionId, newStatusKey) => {
+    // Optimistic update — flip the local row immediately, roll back on error.
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.sessionId === sessionId
+          ? { ...s, statusKey: newStatusKey, status: STATUS_LABEL[newStatusKey] || s.status }
+          : s
+      )
+    );
+    try {
+      await updateChatMetadata(sessionId, { status: newStatusKey });
+    } catch (err) {
+      alert("Status update failed: " + (err.message || "Unknown error"));
+      fetchSessions();   // rollback by refetching the truth
     }
   };
 
@@ -245,8 +315,9 @@ const ItineraryManagement = () => {
                 className="appearance-none bg-white border border-gray-200 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 outline-none focus:border-gray-300 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
               >
                 <option>All</option>
-                <option>Active</option>
-                <option>Draft</option>
+                <option>Saved</option>
+                <option>Not Started</option>
+                <option>In Progress</option>
                 <option>Completed</option>
               </select>
               <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -336,48 +407,48 @@ const ItineraryManagement = () => {
                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.travelers}</td>
                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.duration}</td>
                     <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.estimatedCost}</td>
-                    <td className="px-5 py-3 text-gray-700 whitespace-nowrap">{item.status}</td>
-                    <td className="px-5 py-3 whitespace-nowrap">
-                      <div className="relative" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
-                          className="p-1 text-gray-400 hover:text-gray-700 transition-all duration-200"
-                        >
-                          <MoreVertical size={14} />
-                        </button>
-                        {menuOpenId === item.id && (
-                          <div className="absolute right-0 top-7 z-10 bg-white border border-gray-100 rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[160px]">
-                            <button
-                              onClick={() => navigate(`/chat?session=${item.sessionId}`)}
-                              className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-gray-700 hover:bg-gray-50 transition-colors"
+                    <td className="px-5 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const opt = STATUS_OPTIONS.find((o) => o.value === item.statusKey)
+                                  || STATUS_OPTIONS[0];
+                        return (
+                          <div className="relative inline-block">
+                            <select
+                              value={item.statusKey}
+                              onChange={(e) => handleStatusChange(item.sessionId, e.target.value)}
+                              className={`appearance-none ${opt.color} text-[11.5px] font-medium pl-2.5 pr-7 py-1 rounded-full border-0 outline-none cursor-pointer focus:ring-2 focus:ring-[#FFDE39]/40 transition-all`}
                             >
-                              Open Chat
-                            </button>
-                            {item.hasItinerary && (
-                              <>
-                                <button
-                                  onClick={() => loadAndView(item.sessionId)}
-                                  className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <Eye size={12} /> View Itinerary
-                                </button>
-                                <button
-                                  onClick={() => loadAndDownload(item.sessionId)}
-                                  className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <Download size={12} /> Download PDF
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => handleDelete(item.sessionId)}
-                              className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
+                              {STATUS_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value} className="bg-white text-gray-800">
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <RowActionMenu
+                        open={menuOpenId === item.id}
+                        onToggle={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
+                        onClose={() => setMenuOpenId(null)}
+                        items={[
+                          {
+                            label: "Open Chat",
+                            onClick: () => navigate(`/chat?session=${item.sessionId}`),
+                          },
+                          ...(item.hasItinerary ? [
+                            { icon: <Eye size={12} />,      label: "View Itinerary", onClick: () => loadAndView(item.sessionId) },
+                            { icon: <Download size={12} />, label: "Download PDF",  onClick: () => loadAndDownload(item.sessionId) },
+                          ] : []),
+                          {
+                            icon: <Trash2 size={12} />, label: "Delete", danger: true,
+                            onClick: () => handleDelete(item.sessionId),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))

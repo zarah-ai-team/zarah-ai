@@ -54,6 +54,11 @@ class MCPClient:
         self._unavailable = False
         self._rpc_lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
+        # Cached, dynamically-resolved tool names. tavily-mcp v1 used "tavily-search"
+        # / "tavily-extract"; v2 renamed them to "tavily_search" / "tavily_extract".
+        # We discover the actual name on first use via tools/list to support both.
+        self._search_tool_name: Optional[str] = None
+        self._extract_tool_name: Optional[str] = None
 
     async def start(self) -> None:
         async with self._start_lock:
@@ -236,14 +241,59 @@ class MCPClient:
         await self.stop()
 
     async def search_web(self, query: str, depth: str = "basic") -> str:
-        """Search using Tavily MCP — tool name is 'tavily-search'."""
+        """Search via Tavily MCP. Resolves the tool name dynamically (v1 vs v2)."""
+        name = await self._resolve_tool("search")
         return await self.call_tool(
-            "tavily-search",
+            name,
             {"query": query, "search_depth": depth, "max_results": 3},
         )
 
     async def fetch_page(self, url: str) -> str:
-        return await self.call_tool("tavily-extract", {"urls": [url]})
+        name = await self._resolve_tool("extract")
+        return await self.call_tool(name, {"urls": [url]})
+
+    async def _resolve_tool(self, kind: str) -> str:
+        """
+        Resolve the actual MCP tool name for 'search' or 'extract' by listing
+        the server's tools. tavily-mcp v1 uses hyphens ('tavily-search'),
+        v2 uses underscores ('tavily_search'). Cached after first lookup.
+        """
+        cached = self._search_tool_name if kind == "search" else self._extract_tool_name
+        if cached:
+            return cached
+
+        # Preferred names in order: v2 (underscore), v1 (hyphen), bare verb.
+        if kind == "search":
+            preferred = ("tavily_search", "tavily-search", "search")
+        else:
+            preferred = ("tavily_extract", "tavily-extract", "extract")
+
+        try:
+            tools = await self.list_tools()
+            names = [t.get("name", "") for t in tools if isinstance(t, dict)]
+            chosen: Optional[str] = None
+            for cand in preferred:
+                if cand in names:
+                    chosen = cand
+                    break
+            if not chosen:
+                # Fall back to any tool name containing the verb.
+                for n in names:
+                    if kind in n.lower():
+                        chosen = n
+                        break
+            if chosen:
+                if kind == "search":
+                    self._search_tool_name = chosen
+                else:
+                    self._extract_tool_name = chosen
+                logger.info("Resolved Tavily %s tool: %s", kind, chosen)
+                return chosen
+        except Exception as e:
+            logger.warning("Tool discovery failed (%s); falling back to legacy name", e)
+
+        # Last-resort legacy name (will produce a clear -32601 error if wrong).
+        return preferred[0]
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> str:
         if not self._initialized:

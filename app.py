@@ -1,5 +1,6 @@
 # app.py
 import os
+import re
 from dotenv import load_dotenv
 load_dotenv()  # Must be called before any os.getenv() in any module
 
@@ -162,7 +163,8 @@ def _get_missing_formal_fields(fields: dict) -> list:
 
 
 def _build_formal_clarification(fields: dict, missing: list) -> str:
-    """Build a friendly clarification message asking for missing required fields."""
+    """Build a friendly clarification message asking for the FIRST missing field
+    only (one at a time UX). Ordering: destination → pax → duration."""
     dest_str = ""
     if fields.get("destinations"):
         dest_str = " → ".join(fields["destinations"])
@@ -180,12 +182,20 @@ def _build_formal_clarification(fields: dict, missing: list) -> str:
         if intro_parts else "I received your travel request."
     )
 
-    field_labels = [label for _, label in missing]
-    if len(field_labels) == 1:
-        ask = f"To build the itinerary, could you please confirm the **{field_labels[0]}**?"
-    else:
-        joined = ", ".join(f"**{l}**" for l in field_labels[:-1]) + f" and **{field_labels[-1]}**"
-        ask = f"To build the itinerary, could you please confirm the {joined}?"
+    # Ask for ONE field at a time — pick by priority so the user never sees a
+    # multi-question wall. Order: destination first, then pax, then duration.
+    _PRIORITY = ["destination", "destinations", "pax", "total_nights", "nights"]
+    first = None
+    for key, label in missing:
+        if key in _PRIORITY:
+            if first is None or _PRIORITY.index(key) < _PRIORITY.index(first[0]):
+                first = (key, label)
+    if first is None and missing:
+        first = missing[0]
+    ask = (
+        f"To build the itinerary, could you please tell me the **{first[1]}**?"
+        if first else ""
+    )
 
     already_have = []
     if dest_str:
@@ -398,10 +408,11 @@ def get_matcher() -> ItineraryMatcher:
     return matcher
 llm = LocalLLMClient()  # URL resolved from APP_ENV in local_llm_client.py
 price_engine = PriceEngine()
-# Hotel API client (can be disabled via HOTEL_API_ENABLED)
+# Hotel API client (can be disabled via HOTEL_API_ENABLED env var)
 hotel_client = HotelAPIClient(provider=os.getenv("HOTEL_API_PROVIDER"))
-# Toggle to enable/disable live hotel API calls during development
-HOTEL_API_ENABLED = False
+# Toggle live hotel API calls. Default off because most providers require a paid API key.
+# Set HOTEL_API_ENABLED=true (and HOTEL_API_PROVIDER + provider credentials) to enable.
+HOTEL_API_ENABLED = os.getenv("HOTEL_API_ENABLED", "false").lower() in ("1", "true", "yes", "on")
 
 class ChatRequest(BaseModel):
     session_id: str | None = None
@@ -529,6 +540,11 @@ async def chat(request: Request):
                 "sanity_checks": session.get("sanity_checks", [])[-30:],
                 "last_llm_raw": session.get("last_llm_raw"),
                 "last_llm_prompt": session.get("last_llm_prompt"),
+                # Persist transient flow state so reloading the chat restores
+                # the confirmation card / pending-formal-request UI.
+                "pending_confirmation": session.get("pending_confirmation"),
+                "pending_formal_request": session.get("pending_formal_request"),
+                "formal_request_detected": session.get("formal_request_detected", False),
             })
             update_chat_metadata_from_fields(_chat_username, sid, session.get("fields", {}))
         except Exception as e:
@@ -536,6 +552,238 @@ async def chat(request: Request):
 
     # Append message to history
     session["history"].append({"role": "user", "content": req.message})
+
+    # ===== CONVERSATIONAL MODE =====
+    # Only run the heavyweight itinerary-generation pipeline when the user clearly
+    # asks for one. Otherwise reply conversationally so the bot feels human and
+    # users can chat about destinations, ideas, etc. without triggering a 15-min
+    # LLM build. A simple regex catches "generate / create / build / make / plan
+    # /generate the / draft an itinerary".
+    _GENERATE_INTENT_RE = re.compile(
+        r"\b(?:generate|create|build|make|prepare|draft|design|put\s+together|plan|give\s+me|i\s+want|i\s+need)\b"
+        r"[^\.\?\!]{0,80}?\b(?:itinerary|trip\s+plan|schedule|day-?by-?day|day\s*plan)\b",
+        re.IGNORECASE,
+    )
+    # When the session already has a generated itinerary, follow-up messages
+    # like "make it cheaper", "add a beach day", "change the hotel" are edit
+    # requests — we send the existing itinerary + the new ask back to the LLM.
+    _IMPROVE_INTENT_RE = re.compile(
+        r"\b(?:improve|update|refine|tweak|adjust|edit|modify|change|swap|"
+        r"replace|remove|drop|add|include|extend|shorten|cut|expand|"
+        r"make\s+it|can\s+you|please|could\s+you|instead|switch)\b",
+        re.IGNORECASE,
+    )
+    _has_existing_itinerary = bool(session.get("last_llm_raw"))
+    _user_wants_improvement = (
+        _has_existing_itinerary and bool(_IMPROVE_INTENT_RE.search(req.message))
+        and not _GENERATE_INTENT_RE.search(req.message)
+    )
+    _user_asked_to_generate = bool(_GENERATE_INTENT_RE.search(req.message)) or _user_wants_improvement
+    # Also treat formal/structured requests (Route:, City: N Nights, etc.) as
+    # implicit generate intent — those are already DMC-style itinerary briefs.
+    if not _user_asked_to_generate and is_formal_request(req.message):
+        _user_asked_to_generate = True
+
+    # If the chat is paused on a confirmation card, the user's reply is also
+    # treated as generate-intent (they're answering the card, not chitchatting).
+    if not _user_asked_to_generate and session.get("pending_confirmation"):
+        _user_asked_to_generate = True
+    if not _user_asked_to_generate and session.get("pending_formal_request"):
+        _user_asked_to_generate = True
+
+    # ─── ITINERARY IMPROVEMENT FAST-PATH ────────────────────────────────────
+    # User has an existing itinerary AND is asking for changes. Send the old
+    # itinerary + their change request to Ollama and return the updated JSON.
+    # Skips the full enrichment pipeline since fields don't need re-extraction.
+    if _user_wants_improvement:
+        sc("Improvement mode: editing existing itinerary per user feedback")
+        try:
+            _existing = session.get("last_llm_raw") or ""
+            _improve_system = (
+                "You are Zarah, a senior DMC travel consultant. The user has an "
+                "EXISTING itinerary and wants you to MODIFY it based on their feedback. "
+                "Return ONLY a single valid JSON object matching the same schema as the "
+                "original (title, destination, duration_days, pax, event_type, "
+                "itinerary_summary, days[], hotels[], cost_breakdown, inclusions, "
+                "exclusions, important_guidelines, notes). "
+                "Preserve everything that wasn't touched by the user's request. "
+                "Apply the requested changes faithfully. Recompute affected costs. "
+                "Keep day count consistent unless the user explicitly asks to change "
+                "duration. Output JSON only — no markdown, no prose."
+            )
+            _improve_user = (
+                "EXISTING ITINERARY (the JSON the user already has):\n"
+                f"```json\n{_existing[:12000]}\n```\n\n"
+                f"USER'S CHANGE REQUEST:\n{req.message}\n\n"
+                "Return the FULL updated itinerary JSON with the change applied."
+            )
+            _raw = await asyncio.wait_for(
+                asyncio.to_thread(
+                    llm.generate, _improve_system,
+                    [{"role": "user", "content": _improve_user}],
+                ),
+                timeout=int(os.getenv("LOCAL_LLM_TIMEOUT", "900")),
+            )
+            # Try to parse — re-use the same JSON-substring helper used downstream
+            def _strip_fences(t: str) -> str:
+                if not isinstance(t, str): return t or ""
+                t2 = t.strip()
+                if t2.startswith("```"):
+                    parts = t2.split("\n")
+                    if parts and parts[0].startswith("```"):
+                        parts = parts[1:]
+                    if parts and parts[-1].startswith("```"):
+                        parts = parts[:-1]
+                    t2 = "\n".join(parts).strip()
+                return t2
+            def _extract_json_substring(t: str):
+                t2 = _strip_fences(t)
+                start = t2.find("{")
+                if start == -1: return None
+                depth = 0
+                for i in range(start, len(t2)):
+                    if t2[i] == "{": depth += 1
+                    elif t2[i] == "}":
+                        depth -= 1
+                        if depth == 0: return t2[start:i+1]
+                return None
+            _itin_text = _extract_json_substring(_raw)
+            _new_itinerary = None
+            if _itin_text:
+                try:
+                    _new_itinerary = json.loads(_itin_text)
+                except Exception as _je:
+                    sc(f"Improvement JSON parse failed: {_je}")
+            session["last_llm_raw"] = _raw
+            session["history"].append({"role": "assistant_raw", "content": _raw})
+            _sync_chat_to_store()
+            return {
+                "session_id": sid,
+                "itinerary": _new_itinerary,
+                "llm_raw": _raw,
+                "improved": True,
+                "fields": session.get("fields", {}),
+            }
+        except asyncio.TimeoutError:
+            sc("Improvement LLM call timed out")
+            session["history"].append({
+                "role": "assistant",
+                "content": "The improvement is taking longer than expected. Could you try a more focused change (e.g. \"swap day 3's hotel\" or \"replace lunch on day 2\")?",
+            })
+            _sync_chat_to_store()
+            return {"session_id": sid, "reply": "Improvement timed out — try a smaller change.", "conversational": True}
+        except Exception as _ie:
+            logger.exception("Improvement flow failed; falling through to standard generation")
+            sc(f"Improvement flow failed: {type(_ie).__name__}: {_ie}")
+            # fall through to normal flow
+
+    if not _user_asked_to_generate:
+        sc("Conversational mode: progressive field collector")
+
+        # Fast-path: common short greetings get a hardcoded reply so users aren't
+        # waiting 30+ seconds on a CPU-bound llama call just to say hi back.
+        # Greetings only fire when there are NO required fields yet — once the
+        # user starts a real conversation, we move into field-collection mode.
+        _msg_norm = re.sub(r"[^a-z]", "", req.message.lower())
+        _GREETING_REPLIES = {
+            "hi":      "Hi! I'm Zarah, your travel planning assistant. Where are we off to today?",
+            "hello":   "Hello! Tell me about the trip you'd like to plan — destination, dates, who's travelling.",
+            "hey":     "Hey there! What kind of trip can I help you build?",
+            "yo":      "Hey! What kind of trip are we planning?",
+            "hii":     "Hi! What kind of getaway are you thinking about?",
+            "hellow":  "Hello! Tell me where and when you'd like to travel.",
+            "namaste": "Namaste! Where would you like to travel next?",
+            "thanks":  "Anytime! Let me know whenever you'd like me to plan another trip.",
+            "thankyou":"You're welcome! Ready for the next trip whenever you are.",
+        }
+        _have_any_field = any(
+            session.get("fields", {}).get(k)
+            for k in ("destination", "destinations", "duration", "nights", "pax", "event_type")
+        )
+        if _msg_norm in _GREETING_REPLIES and not _have_any_field:
+            _q = _GREETING_REPLIES[_msg_norm]
+            session["history"].append({"role": "assistant", "content": _q})
+            _sync_chat_to_store()
+            return {"session_id": sid, "reply": _q, "conversational": True}
+
+        # ── Progressive field collection ──────────────────────────────────────
+        # Try to harvest fields from the current message and merge into session.
+        try:
+            _parsed = conv_manager.detect_fields_in_text(req.message) or {}
+            for k, v in _parsed.items():
+                if v in (None, "", []):
+                    continue
+                session.setdefault("fields", {})
+                # Don't overwrite an already-good destination if the new pass found
+                # something less specific; otherwise prefer the new value.
+                if k not in session["fields"] or k in ("nights", "duration", "pax", "event_type"):
+                    session["fields"][k] = v
+        except Exception as _pe:
+            logger.exception("Field detection in conversational mode failed")
+
+        # If the user typed a one-shot answer to the previous question (e.g. last
+        # bot turn was "How many travelers?" and the user replies "4"), grab a
+        # bare number for whatever's currently missing.
+        try:
+            _missing_now = conv_manager.next_missing_field(session.get("fields", {}))
+            if _missing_now in ("pax", "duration"):
+                _num_m = re.search(r"\b(\d+)\b", req.message)
+                if _num_m:
+                    session.setdefault("fields", {})[_missing_now] = int(_num_m.group(1))
+            elif _missing_now == "event_type":
+                _stripped = req.message.strip().lower()
+                # Accept short single-line answers as the event type
+                if 0 < len(_stripped) <= 40 and "\n" not in _stripped:
+                    session.setdefault("fields", {})["event_type"] = req.message.strip()
+            elif _missing_now == "destination":
+                # Only accept short destination-like answers (1-4 words, no digits)
+                _stripped = req.message.strip()
+                _words = _stripped.split()
+                if 1 <= len(_words) <= 4 and not re.search(r"\d", _stripped) and len(_stripped) <= 40:
+                    session.setdefault("fields", {})["destination"] = _stripped.strip(",.!?")
+        except Exception:
+            pass
+
+        # Re-evaluate after merges
+        _missing = conv_manager.next_missing_field(session.get("fields", {}))
+        if _missing == "client_status":
+            _missing = None
+
+        if _missing:
+            # Conversational ask for the next single missing field. Phrase it
+            # warmly with light context if we already have something.
+            _have = session.get("fields", {})
+            _ctx_bits = []
+            if _have.get("destination"):  _ctx_bits.append(f"trip to {_have['destination']}")
+            if _have.get("pax"):          _ctx_bits.append(f"{_have['pax']} travellers")
+            if _have.get("duration") or _have.get("nights"):
+                n = _have.get("duration") or _have.get("nights")
+                _ctx_bits.append(f"{n} nights")
+            if _have.get("event_type"):   _ctx_bits.append(f"{_have['event_type']} vibe")
+            _ctx = ("Got it — " + ", ".join(_ctx_bits) + ". ") if _ctx_bits else ""
+            _q = _ctx + (PROMPTS.get(_missing) or f"Could you share the {_missing}?")
+            session["history"].append({"role": "assistant", "content": _q})
+            _sync_chat_to_store()
+            return {"session_id": sid, "reply": _q, "conversational": True}
+
+        # All required fields collected — invite the user to generate. Set
+        # pending_confirmation so a "yes" reply triggers the full pipeline.
+        if not session.get("pending_confirmation"):
+            _summary_card = _build_confirmation_dict(session["fields"])
+            session["pending_confirmation"] = {"fields": dict(session["fields"])}
+            _confirm_msg = _build_confirmation_message(session["fields"])
+            session["history"].append({"role": "assistant", "content": _confirm_msg})
+            _sync_chat_to_store()
+            return {
+                "session_id": sid,
+                "need_confirmation": True,
+                "confirmation_fields": _summary_card,
+                "prompt": _confirm_msg,
+                "collected": session["fields"],
+            }
+
+        # Already have a pending confirmation — fall through to standard flow
+        # (which handles confirm/reject replies on the existing path).
 
     # ===== HANDLE PENDING CONFIRMATION RESPONSE =====
     # If we previously showed the user a trip-details confirmation card, handle their reply.
@@ -716,6 +964,25 @@ async def chat(request: Request):
         sc(f"Removing corrupted field '{_k}' (looks like an error message)")
         fields.pop(_k, None)
 
+    # ── Mandatory-field gate ────────────────────────────────────────────────────
+    # Final check that all required fields (destination, duration, pax, event_type)
+    # are present before showing the confirmation card / calling the LLM. The
+    # earlier flows (formal request, JSON body, free-text via conv_manager) each
+    # gate on this, but a session can still reach this point with partial data
+    # (e.g. user editing fields from the confirmation card). Without this gate
+    # the LLM gets called with missing inputs and produces malformed itinerary
+    # JSON ("Expecting ',' delimiter" parse failures).
+    if not _goto_generation:
+        _missing = conv_manager.next_missing_field(fields)
+        if _missing == "client_status":
+            _missing = None
+        if _missing:
+            _prompt = PROMPTS.get(_missing, f"Please provide {_missing}.")
+            session["history"].append({"role": "assistant", "content": _prompt})
+            _sync_chat_to_store()
+            return {"session_id": sid, "need_more": True, "prompt": _prompt, "collected": fields}
+    # ── End mandatory-field gate ────────────────────────────────────────────────
+
     # ── Universal confirmation gate ─────────────────────────────────────────────
     # Before calling the LLM, always show the user a summary card to review and
     # confirm (or edit) the extracted trip details. This gate fires for BOTH
@@ -782,6 +1049,68 @@ async def chat(request: Request):
         except Exception:
             pass
 
+    # ── Destination sanity check ────────────────────────────────────────────────
+    # Catches both kinds of bad data:
+    #   (a) the entire user request stored as `destination` (legacy bug)
+    #   (b) a single-word noun like "Estimate" that slipped through the old
+    #       permissive heuristic.
+    # Recovery strategy: re-run the resolver on the destination value AND on
+    # every user message in history; first valid hit wins. If nothing recovers,
+    # bounce to the user with a clarifying question.
+    try:
+        from destination_resolver import is_known_destination as _dest_known
+    except Exception:
+        _dest_known = None
+
+    _dest_val = (fields.get("destination") or "").strip()
+    _looks_bogus = (
+        not _dest_val
+        or len(_dest_val) > 60
+        or any(ch in _dest_val for ch in ".!?")
+        or len(_dest_val.split()) > 4
+        or re.search(r"\d", _dest_val)
+        or (_dest_known is not None and not _dest_known(_dest_val))
+    )
+    if _dest_val and _looks_bogus:
+        sc(f"destination='{_dest_val}' looks bogus — attempting recovery")
+        # Try re-extracting from the destination string itself first, then from
+        # the most recent user messages in history.
+        _candidates: List[str] = [_dest_val]
+        for h in reversed(session.get("history", [])):
+            if isinstance(h, dict) and h.get("role") == "user" and isinstance(h.get("content"), str):
+                _candidates.append(h["content"])
+                if len(_candidates) >= 6:
+                    break
+        _better = None
+        for cand in _candidates:
+            try:
+                _re_extracted = conv_manager.detect_fields_in_text(cand)
+                _b = _re_extracted.get("destination")
+                if _b and (_dest_known is None or _dest_known(_b)):
+                    _better = _b
+                    # Also pull in the route if available
+                    if _re_extracted.get("destinations"):
+                        fields["destinations"] = _re_extracted["destinations"]
+                    if _re_extracted.get("route"):
+                        fields["route"] = _re_extracted["route"]
+                    break
+            except Exception:
+                continue
+        if _better:
+            fields["destination"] = _better
+            sc(f"Recovered destination='{_better}' (was '{_dest_val}')")
+        else:
+            fields.pop("destination", None)
+            fields.pop("destinations", None)
+            _ask = (
+                "I couldn't pin down the destination from your previous request — "
+                "could you tell me just the city or country? For example: 'Singapore' "
+                "or 'Dubai → Abu Dhabi'."
+            )
+            session["history"].append({"role": "assistant", "content": _ask})
+            _sync_chat_to_store()
+            return {"session_id": sid, "need_more": True, "prompt": _ask, "collected": fields}
+
     features = feature_extractor.extract(fields)
 
     predicted_cost = cost_model.predict_cost(features)
@@ -816,6 +1145,15 @@ async def chat(request: Request):
         elif _entry.get("text_preview"):
             user_kb_texts.append(f"[{_entry.get('filename','doc')}]\n{_entry['text_preview']}")
     sc(f"Loaded {len(user_kb_texts)} user KB documents for query='{_kb_query}'")
+
+    # Filter nights_per_city to only include real destination cities (not labels like "Total Duration").
+    # Computed early because the price-context task below depends on it.
+    _known_dest_set = {d.lower() for d in (fields.get("destinations") or []) if d}
+    _raw_npc = fields.get("nights_per_city") or {}
+    _nights_per_city = {
+        city: nights for city, nights in _raw_npc.items()
+        if not _known_dest_set or city.lower() in _known_dest_set
+    }
 
     # Start parallel tasks: attractions lookup and real-time enrichment.
     # For multi-destination trips, use a combined query (all cities).
@@ -1070,13 +1408,7 @@ async def chat(request: Request):
     _is_multi_dest = bool(fields.get("destinations") and len(fields.get("destinations", [])) > 1)
     _has_seniors = bool(fields.get("seniors") or fields.get("senior_friendly"))
 
-    # Filter nights_per_city to only include real destination cities (not labels like "Total Duration")
-    _known_dest_set = {d.lower() for d in (fields.get("destinations") or []) if d}
-    _raw_npc = fields.get("nights_per_city") or {}
-    _nights_per_city = {
-        city: nights for city, nights in _raw_npc.items()
-        if not _known_dest_set or city.lower() in _known_dest_set
-    }
+    # _nights_per_city and _known_dest_set were computed earlier (before the price-context task).
 
     # Compute total days early so it can feed both system_prompt and user prompt
     _total_nights_raw = fields.get("total_nights") or fields.get("nights") or fields.get("duration")
@@ -1136,8 +1468,16 @@ async def chat(request: Request):
     ) if _is_multi_dest else ""
 
     _transport_rule = (
-        f"- Transport: {_transport_pref}. Specify vehicle type, daily hire rate, and total hire cost.\n"
-    ) if _transport_pref else "- Transport: Private vehicle. Specify vehicle type and daily rate.\n"
+        f"- Transport: {_transport_pref}. Specify the actual vehicle type used in the destination "
+        f"(NOT a single hardcoded model like Toyota Innova) — pick what fits {{pax_for_transport}} "
+        f"travellers from realistic locally-available options (sedan, SUV, minivan, mini-coach, "
+        f"premium chauffeured car, etc.). Provide daily hire rate and total hire cost.\n"
+    ).replace("{pax_for_transport}", str(int(fields.get("pax") or 2))) if _transport_pref else (
+        "- Transport: Private vehicle/car appropriate for the destination and group size. "
+        "Choose from realistic locally-operated options (sedan, SUV, minivan, mini-coach, premium "
+        "chauffeured car). Do NOT default to Toyota Innova or any single brand. Specify vehicle "
+        "type and daily rate.\n"
+    )
 
     _driver_rule = f"- Driver: {_driver_pref}.\n" if _driver_pref else ""
     _guide_rule = "- Include a local English-speaking guide for all sightseeing days; specify daily guide fee.\n" if _guide_req else ""
@@ -1162,7 +1502,7 @@ async def chat(request: Request):
         '  "duration_days": <number>,\n'
         '  "pax": <number>,\n'
         '  "event_type": "leisure | corporate | MICE | incentive | extension",\n'
-        '  "overview": "4-6 sentence executive summary covering the trip theme, key experiences, travel style, standout highlights, and what makes this itinerary special",\n'
+        '  "itinerary_summary": "4-6 sentence narrative summary describing the KIND of trip (e.g. romantic escape, cultural immersion, high-energy MICE programme, family adventure) and the EXPERIENCE the traveller will have at this destination — sensory highlights, the trip\'s character and pace, what they will feel/see/taste, and what makes this destination memorable for this type of group. Write in evocative, present-tense prose.",\n'
         '  "days": [\n'
         '    {\n'
         '      "day": <number>,\n'
@@ -1172,7 +1512,7 @@ async def chat(request: Request):
         '      "morning": "07:30 – Breakfast at [specific hotel restaurant or local café] ([cuisine], approx INR [X]/person). 09:00 – Depart hotel by private [vehicle type] (approx [X] min drive). 09:30 – Arrive at [Landmark/Venue]; guided tour covering [specific features, historical context]; entry fee INR [X]/person; approx [X] hrs. 11:30 – Walk to [next venue or market]; highlights include [specific stalls/items/sights]. 12:30 – Lunch at [Restaurant Name], [locality]; signature dishes: [dish1, dish2]; approx INR [X]/person.",\n'
         '      "afternoon": "14:00 – Transfer to [Venue/Area] (approx [X] min). 14:30 – [Activity at Venue]; entry INR [X]; duration approx [X] hrs; [specific things to see/do]. 16:30 – [Next activity or leisure time — specific venue, what to look for]. 17:30 – Return transfer to hotel; freshen up.",\n'
         '      "evening": "19:00 – Depart for [cultural show / sunset point / dinner venue] (approx [X] min). 19:30 – [Evening activity — name, description, ticket cost INR [X] if applicable]. 20:30 – Dinner at [Restaurant Name], [locality]; [cuisine type]; recommended dishes: [dish1, dish2]; approx INR [X]/person. 22:30 – Return to hotel.",\n'
-        '      "transport_note": "Private [vehicle type, e.g. Toyota Innova / luxury coach] for the full day — INR [X] including driver and fuel",\n'
+        '      "transport_note": "Private [vehicle type appropriate for the destination, group size, and trip style — e.g. private car, sedan, SUV, minivan, luxury coach, premium chauffeured car, electric/hybrid, etc.] for the full day — INR [X] including driver and fuel. Choose the vehicle based on what is actually offered locally and the pax count; do NOT default to a single brand or model.",\n'
         '      "hotel": {"name": "Hotel name", "area": "Locality/district", "category": "4-Star / 5-Star Deluxe"}\n'
         '    }\n'
         '  ],\n'
@@ -1196,6 +1536,7 @@ async def chat(request: Request):
         "}\n\n"
         "STRICT RULES:\n"
         + (f"- CRITICAL: Generate EXACTLY {_num_days} day objects in the 'days' array. Set duration_days={_num_days}. Do NOT generate fewer or more days under any circumstances.\n" if _num_days else "")
+        + "- itinerary_summary MUST be a 4-6 sentence narrative paragraph capturing the trip's character (kind of trip) and the experience the traveller will have at this destination. Do NOT skip this field, do NOT leave it empty, do NOT replace it with a list.\n"
         + "- morning, afternoon, and evening MUST each be a full multi-sentence paragraph with: exact timings (HH:MM format), real venue/restaurant names, INR entry costs, travel durations, and at least 2-3 distinct activities per period.\n"
         "- Do NOT use vague filler like 'visit a local market' — name the actual market, what is sold there, and the cost.\n"
         "- Every meal must name the specific restaurant and 1-2 signature dishes with approximate per-person cost in INR.\n"
@@ -1210,17 +1551,21 @@ async def chat(request: Request):
         + _room_rule
         + ("- Include a full-day Ferrari World plan on the appropriate day (tickets, rides, dining).\n" if ferrari_requested else "")
         + "- Do NOT invent Ferrari World plans unless destination is Abu Dhabi and explicitly requested.\n"
+        "- COUNTRY-LEVEL DESTINATIONS: If the destination is a country rather than a specific city (e.g. 'Japan', 'France', 'Italy', 'Thailand'), build a smart multi-city itinerary covering 2-4 representative cities suited to the trip type, duration, and traveller profile. Choose iconic plus complementary cities (e.g. Japan → Tokyo + Kyoto + Osaka; Italy → Rome + Florence + Venice). Distribute days sensibly across cities, label each day with its city, and add inter-city transfers (rail/road/flight) with timings and costs. Set destination string to the country and populate destinations array with the chosen cities.\n"
         "- Do NOT include raw document text or verbatim historical content.\n"
         "- Output pure JSON only. No text before or after the JSON object."
     )
 
-    # Build user prompt — no formatting instructions here (system prompt owns those)
+    # Build user prompt — no formatting instructions here (system prompt owns those).
+    # NOTE: price_ctx is initially heuristic-only here; we recompute it later with
+    # the live Tavily/Wikipedia text mined for prices (see "Recompute price_ctx" below).
     try:
         price_ctx = price_engine.estimate_total(fields, int(fields.get("pax", 1)))
-        sc(f"Computed price context from price engine for pax={fields.get('pax', 1)}")
+        sc(f"Computed price context (heuristic) for pax={fields.get('pax', 1)}")
     except Exception as e:
         price_ctx = {}
-        sc(f"Price context computation failed: {e}")
+        logger.exception("Price context computation failed")
+        sc(f"Price context computation failed: {type(e).__name__}: {e}")
 
     # Build a clean, readable summary of confirmed trip fields
     def _fmt_fields_for_prompt(f: dict) -> str:
@@ -1284,23 +1629,28 @@ async def chat(request: Request):
     # First fetch real-time data (Wikipedia, Attractions, News) — fetch each with a timeout
     # so we can inject it into the LLM prompt before calling the LLM. Add sanity checks.
     try:
-        # Per-task timeouts to avoid blocking the whole request
+        # Per-task timeouts to avoid blocking the whole request.
+        # Bumped from 5s/4s — Wikipedia + Overpass routinely take 2-4s and were
+        # failing the budget under load. Errors below now log full stack traces
+        # via logger.exception so the terminal shows the real cause.
         try:
-            realtime_raw = await asyncio.wait_for(realtime_task, timeout=5)
+            realtime_raw = await asyncio.wait_for(realtime_task, timeout=15)
         except asyncio.TimeoutError:
-            sc("realtime_task timed out after 5s")
+            sc("realtime_task timed out after 15s")
             realtime_raw = {}
         except Exception as e:
-            sc(f"realtime_task failed: {e}")
+            logger.exception("realtime_task failed")
+            sc(f"realtime_task failed: {type(e).__name__}: {e}")
             realtime_raw = {}
 
         try:
-            attractions_raw = await asyncio.wait_for(attractions_task, timeout=4)
+            attractions_raw = await asyncio.wait_for(attractions_task, timeout=120)
         except asyncio.TimeoutError:
-            sc("attractions_task timed out after 4s")
+            sc("attractions_task timed out after 120s")
             attractions_raw = []
         except Exception as e:
-            sc(f"attractions_task failed: {e}")
+            logger.exception("attractions_task failed")
+            sc(f"attractions_task failed: {type(e).__name__}: {e}")
             attractions_raw = []
 
         # Sanitize the payloads
@@ -1316,12 +1666,13 @@ async def chat(request: Request):
         _live_price_ctx: Dict[str, Any] = {}
         if price_ctx_task:
             try:
-                _live_price_ctx = await asyncio.wait_for(price_ctx_task, timeout=8)
+                _live_price_ctx = await asyncio.wait_for(price_ctx_task, timeout=20)
                 sc(f"Price context fetched: cities={list(_live_price_ctx.get('per_city', {}).keys())}")
             except asyncio.TimeoutError:
-                sc("price_ctx_task timed out after 8s")
+                sc("price_ctx_task timed out after 20s")
             except Exception as _pe:
-                sc(f"price_ctx_task failed: {_pe}")
+                logger.exception("price_ctx_task failed")
+                sc(f"price_ctx_task failed: {type(_pe).__name__}: {_pe}")
     except Exception as e:
         logger.error("Failed to pre-gather real-time data: %s", e)
         realtime_data = {"wikipedia": {}, "attractions": [], "news": []}
@@ -1373,23 +1724,40 @@ async def chat(request: Request):
         _has_kb = bool(kb_summary)
         _max_cities = 3
 
+        # Build a date hint for price queries (current month/year if no trip date set)
+        from datetime import date as _date
+        _trip_when = (
+            str(fields.get("trip_start_date") or fields.get("checkin_date") or "").strip()
+            or _date.today().strftime("%B %Y")
+        )
+        _pax_hint = fields.get("pax") or 2
+        _hotel_cat = fields.get("hotel_category") or "4-star"
+
         if _search_cities:
             async def _tavily_city(city: str) -> str:
                 try:
                     _cli = await asyncio.wait_for(get_mcp_client(), timeout=10)
-                    # 2 queries per city: attractions + local tips
-                    _q1 = f"top tourist attractions things to do {city} travel itinerary tips"
-                    _q2 = f"best restaurants local experiences {city} for tourists"
-                    _r1 = await asyncio.wait_for(_cli.search_web(_q1, depth="basic"), timeout=12)
-                    # Only run second query when KB is empty (save time otherwise)
-                    _r2 = ""
+                    # 3 queries per city: attractions, prices (always), local dining (if KB empty)
+                    _q_attr = f"top tourist attractions things to do {city} travel itinerary tips"
+                    _q_price = (
+                        f"{_hotel_cat} hotel price per night {city} {_trip_when} "
+                        f"average daily cost meals food activities transport for {_pax_hint} travelers"
+                    )
+                    _q_dining = f"best restaurants local experiences {city} for tourists"
+
+                    _r_attr = await asyncio.wait_for(_cli.search_web(_q_attr, depth="basic"), timeout=12)
+                    _r_price = await asyncio.wait_for(_cli.search_web(_q_price, depth="basic"), timeout=12)
+                    # Only run dining query when KB is empty (save time otherwise)
+                    _r_dining = ""
                     if not _has_kb:
-                        _r2 = await asyncio.wait_for(_cli.search_web(_q2, depth="basic"), timeout=12)
+                        _r_dining = await asyncio.wait_for(_cli.search_web(_q_dining, depth="basic"), timeout=12)
                     parts = []
-                    if _r1:
-                        parts.append(f"Attractions & Activities:\n{_r1[:700]}")
-                    if _r2:
-                        parts.append(f"Dining & Local Experiences:\n{_r2[:500]}")
+                    if _r_attr:
+                        parts.append(f"Attractions & Activities:\n{_r_attr[:700]}")
+                    if _r_price:
+                        parts.append(f"Live Prices & Costs:\n{_r_price[:800]}")
+                    if _r_dining:
+                        parts.append(f"Dining & Local Experiences:\n{_r_dining[:500]}")
                     return f"[{city}]\n" + "\n".join(parts) if parts else ""
                 except asyncio.TimeoutError:
                     sc(f"Tavily: timeout for {city}")
@@ -1407,6 +1775,25 @@ async def chat(request: Request):
                 sc(f"Tavily: injected {len(_tavily_blocks)} city block(s) into prompt")
             else:
                 sc("Tavily: no usable results returned")
+
+            # Recompute price_ctx now that we have live Tavily prose. The price engine
+            # mines numeric prices from this text and blends them with the heuristic
+            # range (live data weighted 70%) — gives destination-aware pricing instead
+            # of one-size-fits-all baselines.
+            try:
+                price_ctx = price_engine.estimate_total(
+                    fields,
+                    int(fields.get("pax", 1)),
+                    live_text=realtime_context,
+                )
+                sc(
+                    f"Recomputed price context with live data: "
+                    f"mined={price_ctx.get('live_prices_mined', 0)} prices, "
+                    f"hotel_source={price_ctx.get('accommodation_range', {}).get('source', 'n/a')}"
+                )
+            except Exception as _pe:
+                logger.exception("Live price recomputation failed (keeping heuristic price_ctx)")
+                sc(f"Live price recomputation failed: {type(_pe).__name__}: {_pe}")
         else:
             sc("Tavily: no destination to search")
     except asyncio.TimeoutError:
@@ -1473,15 +1860,39 @@ async def chat(request: Request):
         + "- Every day MUST have morning, afternoon, AND evening — each a detailed multi-sentence paragraph with HH:MM timings, real venue names, INR costs, and travel durations.\n"
         "- Name specific restaurants for every meal — include 1-2 signature dishes and approx cost per person.\n"
         "- Every day MUST have transport_note with the vehicle type and daily INR hire cost.\n"
-        "- The overview field must be 4-6 sentences covering theme, key highlights, and what makes the trip special.\n"
+        "- The itinerary_summary field must be 4-6 sentences capturing the kind of trip (theme/character) and the experience the traveller will have at this destination — sensory highlights, pace, and what makes it memorable.\n"
         "- cost_breakdown must be realistic and cover ALL days and ALL pax.\n"
         + ("- Include a full-day Ferrari World plan only when explicitly requested and destination is Abu Dhabi.\n" if ferrari_requested else "")
         + "Return a single JSON object exactly matching the schema in the system prompt."
     )
-    # Include the original raw request message so the LLM has full context
+    # Include the original raw request so the LLM picks up details our extractor
+    # may have missed (specific landmarks, mood, preferences, allergies, etc).
+    # If formal_request_parser already stored a clean raw_text, prefer that.
+    # Otherwise stitch together every user message in the session history — this
+    # covers the conversational/free-text path where raw_text is never set.
     _raw_request_text = fields.get("raw_text") or ""
+    if not _raw_request_text:
+        _user_msgs = [
+            (h.get("content") or "").strip()
+            for h in session.get("history", [])
+            if isinstance(h, dict) and h.get("role") == "user" and h.get("content")
+        ]
+        # Drop confirmation acknowledgements ("yes", "confirm", JSON blobs) so we
+        # only feed the LLM substantive trip-related prose.
+        _filtered = [
+            m for m in _user_msgs
+            if not (
+                m.startswith("{") or m.startswith("[")
+                or m.lower() in {"yes", "confirm", "confirmed", "ok", "okay", "go", "proceed"}
+            )
+        ]
+        _raw_request_text = "\n---\n".join(_filtered).strip()
+
     _raw_request_block = (
-        f"ORIGINAL CLIENT REQUEST (read carefully for any additional context, preferred activities, or special instructions):\n"
+        "ORIGINAL CLIENT REQUEST(S) — read carefully for any additional context, "
+        "preferred activities, special occasions, dietary needs, mood, or other instructions "
+        "that may not appear in the structured trip details above. Extract anything relevant "
+        "even if it isn't in the field summary:\n"
         f"{_raw_request_text}\n\n"
     ) if _raw_request_text else ""
 
@@ -1838,12 +2249,9 @@ async def chat(request: Request):
         "kb_warning": None if kb_docs_used > 0 else "No indexed documents found. Upload and index pricing/hotel documents to improve itinerary accuracy.",
     }
 
-    # If user is authenticated, mark chat as completed
-    if _chat_username:
-        try:
-            update_chat_status(_chat_username, sid, "completed")
-        except Exception:
-            pass
+    # Generation finished. We do NOT mark the chat as "completed" automatically —
+    # the user controls status (Saved / Not Started / In Progress / Completed) from
+    # the Itinerary Management dropdown. Auto-marking would override their choice.
 
     # Clear formal request flag so follow-up messages go through the normal conv_manager flow
     session.pop("formal_request_detected", None)
@@ -1931,13 +2339,21 @@ async def api_get_chat(session_id: str, current_user: dict = Depends(get_current
     chat = get_chat(username, session_id)
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    # Restore in-memory session if not present
+    # Restore in-memory session if not present (including transient flow state)
     if session_id not in SESSIONS:
         SESSIONS[session_id] = {
             "fields": chat.get("fields", {}),
             "history": chat.get("history", []),
             "sanity_checks": chat.get("sanity_checks", []),
+            "pending_confirmation": chat.get("pending_confirmation"),
+            "pending_formal_request": chat.get("pending_formal_request"),
+            "formal_request_detected": chat.get("formal_request_detected", False),
         }
+    # If the chat is paused on a confirmation card, attach the structured dict the
+    # frontend needs to re-render it (otherwise the card text comes back as plain prose).
+    pending = chat.get("pending_confirmation")
+    if pending and pending.get("fields"):
+        chat["pending_confirmation_card"] = _build_confirmation_dict(pending["fields"])
     return {"chat": chat}
 
 
@@ -1978,7 +2394,10 @@ async def api_update_chat_metadata(session_id: str, req: UpdateChatMetadataReque
     if req.estimated_cost is not None:
         meta_updates["estimated_cost"] = req.estimated_cost
     if req.status is not None:
-        valid_statuses = {"draft", "in_progress", "completed", "cancelled"}
+        valid_statuses = {
+            "saved", "not_started", "in_progress", "completed",
+            "draft", "cancelled",   # legacy values kept for back-compat
+        }
         if req.status not in valid_statuses:
             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {sorted(valid_statuses)}")
         meta_updates["status"] = req.status

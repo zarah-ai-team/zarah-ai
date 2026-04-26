@@ -1,31 +1,150 @@
 """conversation_manager.py
 Handles multi-turn conversation and collecting required fields.
+
+Field extraction strategy (tried in order, first that returns a non-empty
+dict wins for the corresponding key):
+  1. LangChain + Ollama structured output  (intelligent — handles nuance)
+  2. country-state-city DB destination scan (definitive for place names)
+  3. Regex heuristics                       (fast fallback for numbers / words)
 """
+import os
 import re
 from typing import Dict, Any
 from llm_field_extractor import extract_fields_via_llm
 from itinerary_database import list_available_destinations
+try:
+    from destination_resolver import detect_route as _resolver_detect_route, is_known_destination as _resolver_is_known
+except Exception:
+    _resolver_detect_route = None
+    _resolver_is_known = None
+
+try:
+    from langchain_field_extractor import extract_fields as _langchain_extract
+except Exception:
+    _langchain_extract = None
+
+# Whether LangChain extraction runs by default. Disabled when set to "0"/"false"
+# (useful for tests, or if the local LLM is too slow for per-message extraction).
+_USE_LANGCHAIN = os.getenv("USE_LANGCHAIN_EXTRACTOR", "1").lower() not in ("0", "false", "no")
 
 
-# Heuristic blacklist of common non-location nouns that may be capitalized
+# Heuristic blacklist of common non-location nouns/verbs/adjectives that may
+# appear capitalized at the start of a travel query but are NOT destinations.
+# Without this list a sentence like "Estimate the total trip cost..." extracts
+# "Estimate" as the destination.
 _DEST_BLACKLIST = set([
-    "meal", "breakfast", "lunch", "dinner", "plan", "itinerary", "booking", "schedule", "hotel",
-    "flight", "taxi", "car", "family", "party", "team", "group",
+    # meal / lodging / transport nouns
+    "meal", "breakfast", "lunch", "dinner", "snack",
+    "plan", "itinerary", "booking", "schedule", "hotel", "flight",
+    "taxi", "cab", "car", "vehicle", "bus", "train",
+    # group nouns
+    "family", "party", "team", "group", "couple", "client", "customer",
+    "guest", "traveler", "traveller", "person", "people", "adult", "adults",
+    # verbs commonly used at sentence start
+    "estimate", "calculate", "compute", "summarize", "summarise",
+    "analyze", "analyse", "review", "optimize", "optimise",
+    "build", "generate", "create", "make", "prepare", "draft", "design",
+    "suggest", "recommend", "propose", "show", "tell", "give", "provide",
+    "explain", "describe", "list", "share", "draft", "find",
+    "include", "exclude", "skip", "remove", "add",
+    # common adjectives/adverbs
+    "total", "rough", "approximate", "average", "minimum", "maximum",
+    "luxury", "budget", "midrange", "premium", "deluxe",
+    "corporate", "leisure", "holiday", "vacation", "honeymoon",
+    "domestic", "international", "private", "shared",
+    # generic travel nouns
+    "trip", "travel", "journey", "tour", "destination", "route",
+    "cost", "price", "budget", "expense", "fee",
+    "sightseeing", "activity", "activities", "experience",
+    # time / date words
+    "morning", "afternoon", "evening", "night", "midnight", "noon",
+    "today", "tomorrow", "yesterday", "tonight",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+    # filler / pronouns
+    "this", "that", "these", "those", "here", "there",
+    "please", "kindly", "thanks", "thank",
+])
+
+# Curated set of common travel destinations (cities) we accept as single-word
+# answers when neither pycountry nor the template DB has them. Lowercase keys.
+_KNOWN_CITIES = set([
+    # Middle East
+    "dubai", "abu dhabi", "sharjah", "ajman", "doha", "muscat", "manama",
+    "riyadh", "jeddah", "mecca", "medina", "amman", "petra", "beirut",
+    "cairo", "luxor", "alexandria", "istanbul", "ankara", "cappadocia",
+    # Asia
+    "tokyo", "kyoto", "osaka", "hiroshima", "sapporo",
+    "seoul", "busan", "jeju", "beijing", "shanghai", "guangzhou", "hong kong",
+    "taipei", "bangkok", "phuket", "chiang mai", "krabi", "pattaya",
+    "singapore", "kuala lumpur", "penang", "langkawi",
+    "bali", "jakarta", "yogyakarta", "lombok",
+    "hanoi", "ho chi minh", "halong bay", "danang",
+    "manila", "cebu", "boracay", "palawan",
+    "siem reap", "phnom penh", "luang prabang", "vientiane",
+    "kathmandu", "pokhara", "thimphu", "paro",
+    "colombo", "kandy", "galle", "male", "maldives",
+    # India
+    "mumbai", "delhi", "bangalore", "chennai", "kolkata", "hyderabad",
+    "pune", "ahmedabad", "jaipur", "udaipur", "jodhpur", "agra",
+    "varanasi", "rishikesh", "haridwar", "amritsar", "shimla", "manali",
+    "leh", "ladakh", "srinagar", "darjeeling", "gangtok",
+    "goa", "kerala", "kochi", "munnar", "thekkady", "alleppey",
+    "mahabalipuram", "pondicherry", "ooty", "coorg",
+    # Europe
+    "london", "paris", "rome", "venice", "florence", "milan", "naples",
+    "madrid", "barcelona", "seville", "lisbon", "porto",
+    "amsterdam", "rotterdam", "brussels", "bruges",
+    "berlin", "munich", "hamburg", "frankfurt",
+    "vienna", "salzburg", "zurich", "geneva", "bern", "interlaken",
+    "prague", "budapest", "warsaw", "krakow",
+    "athens", "santorini", "mykonos", "crete",
+    "stockholm", "copenhagen", "oslo", "helsinki", "reykjavik",
+    "moscow", "saint petersburg",
+    "edinburgh", "dublin",
+    # Americas
+    "new york", "los angeles", "san francisco", "chicago", "miami", "boston",
+    "seattle", "washington", "las vegas",
+    "toronto", "vancouver", "montreal",
+    "mexico city", "cancun", "tulum", "havana",
+    "rio", "rio de janeiro", "sao paulo", "buenos aires", "santiago", "lima",
+    "machu picchu", "cusco", "quito",
+    # Africa
+    "cape town", "johannesburg", "nairobi", "zanzibar", "marrakech",
+    "casablanca", "fes", "luxor", "victoria falls",
+    # Oceania
+    "sydney", "melbourne", "brisbane", "perth", "auckland", "queenstown",
+    # Country-shorthand often used as destination
+    "uae", "oman", "bahrain", "qatar", "saudi arabia", "kuwait", "jordan",
+    "lebanon", "egypt", "japan", "thailand", "vietnam", "malaysia", "indonesia",
+    "korea", "china", "india", "nepal", "bhutan", "sri lanka",
+    "italy", "france", "spain", "portugal", "germany", "switzerland",
+    "austria", "greece", "turkey", "egypt", "morocco", "kenya",
+    "australia", "new zealand", "usa", "canada", "mexico", "brazil",
+    "argentina", "chile", "peru",
 ])
 
 
 def _is_known_destination(name: str) -> bool:
     """Return True if the given name matches a known destination or country.
 
-    Uses `list_available_destinations()` and, if available, `pycountry` to
-    validate city/country names. Falls back to a heuristic based on word count
-    and blacklist to avoid false positives like 'meal'.
+    Uses the country-state-city DB via destination_resolver when available;
+    otherwise falls back to pycountry / template DB / curated city list.
     """
     if not name or not isinstance(name, str):
         return False
     n = name.strip()
     if not n:
         return False
+    # Authoritative source first: country-state-city DB (~250 countries + ~5k
+    # states/regions + ~147k cities).
+    if _resolver_is_known is not None:
+        try:
+            if _resolver_is_known(n):
+                return True
+        except Exception:
+            pass
 
     # exact or substring match against our itinerary templates
     try:
@@ -46,19 +165,28 @@ def _is_known_destination(name: str) -> bool:
         # pycountry not installed; continue with heuristics
         pass
 
-    # Heuristic rules: multi-word names are likely places (e.g., 'New York')
+    # Curated city/country list — accepts well-known destinations even when
+    # the template DB / pycountry don't have them.
+    if n.lower() in _KNOWN_CITIES:
+        return True
+
+    # Multi-word: more likely a place (e.g., "New York", "Abu Dhabi"), but
+    # still reject if every word is a blacklisted noun/verb.
     if len(n.split()) >= 2:
-        # but still avoid blacklisted nouns
-        if n.lower() in _DEST_BLACKLIST:
+        words = [w.lower() for w in n.split()]
+        if all(w in _DEST_BLACKLIST for w in words):
+            return False
+        if any(w in _DEST_BLACKLIST for w in words):
+            # Mixed bag like "Estimate Total" — reject; valid multi-word
+            # destinations rarely contain blacklisted verbs/adjectives.
             return False
         return True
 
-    # Single-word: must be longer than 3 letters and not a common noun
-    if len(n) <= 3:
-        return False
-    if n.lower() in _DEST_BLACKLIST:
-        return False
-    return True
+    # Single-word: be CONSERVATIVE. Without a hit from pycountry, the template
+    # DB, or the curated _KNOWN_CITIES list, we don't accept random capitalised
+    # words. This prevents "Estimate", "Calculate", "Suggest", etc. from being
+    # treated as destinations.
+    return False
 
 # Only these 4 fields are truly required — everything else is inferred or optional
 REQUIRED_FIELDS = [
@@ -69,7 +197,7 @@ REQUIRED_FIELDS = [
 ]
 
 PROMPTS = {
-    "destination": "Where are we heading? Let me know the destination — a city, country, or multi-city route like Dubai → Abu Dhabi.",
+    "destination": "Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country.",
     "duration":    "How long is the trip? For example: 5 nights, 7 days, or 4N/5D.",
     "pax":         "How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults.",
     "event_type":  "What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation.",
@@ -130,83 +258,200 @@ class ConversationManager:
         self.required = list(REQUIRED_FIELDS)
 
     def detect_fields_in_text(self, text: str) -> Dict[str, Any]:
-        """Try to extract fields from a free-text message using simple heuristics."""
+        """Extract fields using LangChain LLM (if available) + DB resolver + regex."""
         text_l = text.lower()
-        found = {}
-        # destination patterns: 'to Paris', 'in Dubai', 'at Tokyo' (avoid trailing words like 'for')
-        m = re.search(r"to\s+([A-Za-z\s]+?)(?:\s+for\b|,|\.|$)", text, re.IGNORECASE)
-        if not m:
-            m = re.search(r"\b(?:in|at)\s+([A-Za-z\s]+?)(?:\s+for\b|,|\.|$)", text, re.IGNORECASE)
-        if m:
-            dest = m.group(1).strip().strip(".,")
-            if dest and _is_known_destination(dest):
-                found["destination"] = dest
-            else:
-                # ignore likely false positives
-                pass
+        found: Dict[str, Any] = {}
 
-        # Also match standalone capitalized location words (City names), e.g., 'Dubai' or 'Dubai, UAE'
-        if "destination" not in found:
-            # Find all Capitalized phrases and prefer the last likely one (avoids 'Plan' at sentence start)
-            caps = re.findall(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b", text)
-            if caps:
-                # Filter out common verbs/nouns that might appear at sentence start
-                stopwords = set(["the", "for", "and", "plan", "please", "book", "i", "we", "our"]) 
-                # choose last candidate that's not a stopword and length>2
-                candidate = None
-                for c in reversed(caps):
-                    if len(c) > 2 and c.lower() not in stopwords:
-                        candidate = c.strip()
-                        break
-                if candidate and _is_known_destination(candidate):
-                    found.setdefault("destination", candidate)
-                else:
-                    # Ignore capitalized words that aren't valid destinations
-                    pass
-
-        # duration (e.g., '3 days' or '3-day' or '3 days 2 nights') -> store days
-        m = re.search(r"(\d+)[-\s]*days?", text_l)
-        if m:
-            found["duration"] = int(m.group(1))
-        # nights (optional), accept hyphenated forms like '3-night'
-        m2 = re.search(r"(\d+)[-\s]*nights?", text_l)
-        if m2:
-            found.setdefault("nights", int(m2.group(1)))
-
-        # pax (passengers)
-        m = re.search(r"(\d+)\s+(pax|people|persons|guests|passengers)", text_l)
-        if m:
-            found["pax"] = int(m.group(1))
-        # family of N, party of N
-        m = re.search(r"(?:family|party)\s+of\s+(\d+)", text_l)
-        if m:
-            found["pax"] = int(m.group(1))
-        # 'couple' => 2
-        if re.search(r"\bcouple\b", text_l):
-            found.setdefault("pax", 2)
-        # word numbers (one,two,three,four,five)
-        word_nums = {
-            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
-        }
-        for w, n in word_nums.items():
-            if re.search(rf"\b{w}\b\s+(pax|people|persons|guests|passengers|of)", text_l):
-                found.setdefault("pax", n)
-
-        # budget per person with optional currency (e.g., INR 50000 or $300)
-        m = re.search(r"(?:(INR|USD|AED|EUR|\$)\s*)?(\d{2,7}(?:[\.,]\d{1,2})?)\s*(?:per person|pp|each)?", text, re.IGNORECASE)
-        if m:
-            curr = m.group(1)
-            amt = m.group(2)
+        # ── 1. LangChain LLM extraction (intelligent, schema-validated) ──
+        # Skip on very short messages (single words, "yes", numeric replies)
+        # — regex/db are faster and just as good for those.
+        if _USE_LANGCHAIN and _langchain_extract is not None and len(text.split()) >= 3:
             try:
-                amt_f = float(amt.replace(",", ""))
-                found["budget_per_person"] = amt_f
-                if curr:
-                    # normalize currency symbols
-                    curr_norm = curr.upper().replace("$", "USD")
-                    found["budget_currency"] = curr_norm
+                lc = _langchain_extract(text) or {}
+                for k, v in lc.items():
+                    if v in (None, "", []):
+                        continue
+                    found[k] = v
             except Exception:
                 pass
+
+        # ── 2. Database-backed destination + route detection (preferred) ──
+        # Uses country-state-city to find ALL destinations mentioned anywhere
+        # in the query. Sets `destination` to the first one and `destinations`
+        # to the full ordered list when multiple cities/countries are detected.
+        if _resolver_detect_route is not None:
+            try:
+                _route = _resolver_detect_route(text)
+                if _route.get("primary"):
+                    found["destination"] = _route["primary"]
+                if _route.get("is_multi"):
+                    found["destinations"] = _route["destinations"]
+                    found["route"] = _route["route_str"]
+                if _route.get("kind") in ("country", "city", "mixed"):
+                    found["destination_kind"] = _route["kind"]
+            except Exception:
+                pass
+        # Skip the legacy regex destination detectors entirely when the DB-backed
+        # resolver above already produced a result — its output is authoritative
+        # and order-correct.
+        _skip_legacy_dest = "destination" in found
+
+        # Destination patterns: prefer "to <CapitalizedCity>" / "in <City>" / "at <City>".
+        # Stop at any non-letter (digit, punctuation, "for", "in", "during", "from", "next").
+        # The previous regex used [A-Za-z\s]+? which choked on "to Singapore in March 2026"
+        # because 2026 breaks the char class — the engine then failed to capture anything
+        # OR captured way too much.
+        _STOP_WORDS = r"for|in|on|during|from|with|including|next|this|that|by|over|across"
+        if not _skip_legacy_dest:
+            for pat in (
+                rf"\bto\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){{0,2}})\b(?:\s+(?:{_STOP_WORDS})\b|[,\.\d]|$)",
+                rf"\b(?:in|at|visit|visiting)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){{0,2}})\b(?:\s+(?:{_STOP_WORDS})\b|[,\.\d]|$)",
+                # Acronyms (UAE, USA, UK) after to/in/at/for/visit
+                r"\b(?:to|in|at|for|visit|visiting)\s+([A-Z]{2,5})\b",
+                # Lowercase fallback (e.g. user types "to japan")
+                r"\bto\s+([a-z][a-z]{2,}(?:\s+[a-z][a-z]{2,}){0,2})\b(?:\s+for\b|[,\.\d]|$)",
+            ):
+                m = re.search(pat, text)
+                if m:
+                    raw = m.group(1).strip().strip(".,")
+                    # Preserve all-caps acronyms (UAE, USA, UK) — don't title-case them
+                    dest = raw if raw.isupper() else raw.title()
+                    if dest and _is_known_destination(dest):
+                        found["destination"] = dest
+                        break
+
+        # Standalone Capitalized fallback — pick the FIRST capitalized phrase that looks
+        # like a known destination (cities tend to appear early in a request).
+        if "destination" not in found:
+            caps = re.findall(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b", text)
+            stopwords = {
+                "the", "for", "and", "plan", "please", "book", "i", "we", "our",
+                "prepare", "include", "budget", "meal", "marina", "universal",
+                "skypark", "studios", "sands", "bay", "march", "april", "may",
+                "june", "july", "august", "september", "october", "november",
+                "december", "january", "february",
+            }
+            if caps:
+                for c in caps:
+                    parts = [p.lower() for p in c.split()]
+                    # Skip if every word is a stopword
+                    if all(p in stopwords for p in parts):
+                        continue
+                    if len(c) > 2 and _is_known_destination(c):
+                        found["destination"] = c.strip()
+                        break
+
+        # ── Duration / nights ──────────────────────────────────────────────
+        # Combined "4N/5D", "5D/4N", "4D 3N", "3N4D" formats (DMC shorthand)
+        combo = re.search(
+            r"(\d+)\s*[Nn]\s*[/\\\-\s]*\s*(\d+)\s*[Dd]\b|(\d+)\s*[Dd]\s*[/\\\-\s]*\s*(\d+)\s*[Nn]\b",
+            text,
+        )
+        if combo:
+            if combo.group(1) and combo.group(2):
+                found["nights"]   = int(combo.group(1))
+                found["duration"] = int(combo.group(2))
+            elif combo.group(3) and combo.group(4):
+                found["duration"] = int(combo.group(3))
+                found["nights"]   = int(combo.group(4))
+        # Plain '5 nights' / '5-night' / 'five nights'
+        m = re.search(r"(\d+)\s*[-]?\s*nights?\b", text_l)
+        if m:
+            found.setdefault("nights", int(m.group(1)))
+        m = re.search(r"(\d+)\s*[-]?\s*days?\b", text_l)
+        if m:
+            found.setdefault("duration", int(m.group(1)))
+        # Word-number variants ("five nights", "ten days")
+        _word_nums = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20,
+        }
+        for w, n in _word_nums.items():
+            if re.search(rf"\b{w}\s+nights?\b", text_l):
+                found.setdefault("nights", n)
+            if re.search(rf"\b{w}\s+days?\b", text_l):
+                found.setdefault("duration", n)
+        # 'a week' / 'one week' / '2 weeks' → 7-day multiples
+        wk = re.search(r"\b(\d+|a|one|two|three|four)\s*[-]?\s*weeks?\b", text_l)
+        if wk:
+            wmap = {"a": 1, "one": 1, "two": 2, "three": 3, "four": 4}
+            n = wmap.get(wk.group(1), None)
+            if n is None:
+                try: n = int(wk.group(1))
+                except Exception: n = None
+            if n:
+                found.setdefault("nights", n * 7)
+                found.setdefault("duration", n * 7 + 1)
+        # 'long weekend' → 3 nights
+        if re.search(r"\blong\s+weekend\b", text_l):
+            found.setdefault("nights", 3)
+            found.setdefault("duration", 4)
+
+        # ── Pax / travellers ───────────────────────────────────────────────
+        # Standard "N pax / people / persons / guests / passengers / travellers / travelers / adults / members"
+        m = re.search(r"\b(\d+)\s+(?:pax|people|persons|guests|passengers|travell?ers|adults|members|seats)\b", text_l)
+        if m:
+            found["pax"] = int(m.group(1))
+        # "for N" / "for a group of N" / "group of N" / "party of N" / "family of N"
+        if "pax" not in found:
+            m = re.search(r"(?:group|party|family|team|batch)\s+of\s+(\d+)", text_l)
+            if m:
+                found["pax"] = int(m.group(1))
+        if "pax" not in found:
+            m = re.search(r"\bfor\s+a?\s*group\s+of\s+(\d+)", text_l)
+            if m:
+                found["pax"] = int(m.group(1))
+        # "we are N" / "we're N" / "N of us" / "N of them"
+        if "pax" not in found:
+            m = re.search(r"(?:we(?:'re|\s+are)|us(?:\s+being)?|there\s+are)\s+(\d+)", text_l)
+            if m:
+                found["pax"] = int(m.group(1))
+        if "pax" not in found:
+            m = re.search(r"\b(\d+)\s+of\s+(?:us|them|our|my)\b", text_l)
+            if m:
+                found["pax"] = int(m.group(1))
+        # "couple" or "honeymoon couple" → 2
+        if "pax" not in found and re.search(r"\bcouple\b", text_l):
+            found["pax"] = 2
+        # "solo" → 1
+        if "pax" not in found and re.search(r"\bsolo\s+(?:trip|travel|traveller|traveler)?\b", text_l):
+            found["pax"] = 1
+        # Word numbers + travel noun
+        if "pax" not in found:
+            for w, n in _word_nums.items():
+                if re.search(rf"\b{w}\b\s+(pax|people|persons|guests|passengers|travell?ers|adults|members|of\s+us)", text_l):
+                    found["pax"] = n
+                    break
+
+        # budget per person — must include either a currency prefix (INR/USD/AED/EUR/$)
+        # OR a per-person suffix (per person / pp / each / /person). Otherwise we'd
+        # false-positive on bare numbers like "10 days" or "5 nights".
+        m = re.search(
+            r"(INR|USD|AED|EUR|\$)\s*(\d{2,7}(?:[\.,]\d{1,3})?)(?:\s*(k|thousand))?",
+            text, re.IGNORECASE,
+        )
+        if m:
+            curr, amt, mult = m.group(1), m.group(2), m.group(3)
+            try:
+                amt_f = float(amt.replace(",", ""))
+                if mult and mult.lower().startswith("k"):
+                    amt_f *= 1000
+                found["budget_per_person"] = amt_f
+                curr_norm = curr.upper().replace("$", "USD")
+                found["budget_currency"] = curr_norm
+            except Exception:
+                pass
+        else:
+            m_pp = re.search(
+                r"(\d{3,7}(?:[\.,]\d{1,3})?)\s*(?:per\s+person|pp|each|/person)",
+                text, re.IGNORECASE,
+            )
+            if m_pp:
+                try:
+                    found["budget_per_person"] = float(m_pp.group(1).replace(",", ""))
+                except Exception:
+                    pass
 
         # explicit currency like '50 thousand INR' or '50k INR'
         m2 = re.search(r"(\d+(?:[\.,]\d+)?)(?:\s*(k|thousand))?\s*(INR|AED|USD|EUR)", text, re.IGNORECASE)
@@ -519,7 +764,21 @@ class ConversationManager:
 
         elif missing == "destination":
             parsed = self.detect_fields_in_text(message)
-            dest = parsed.get("destination") or (msg_stripped if len(msg_stripped) > 2 else None)
+            dest = parsed.get("destination")
+            # If the parser couldn't find a destination, only accept the raw message
+            # as the destination if it LOOKS LIKE a single short answer (1-4 words,
+            # no punctuation, no digits). Long pasted requests get rejected here so
+            # they fall through to the LLM-assisted extraction below — preventing the
+            # whole paragraph from being mistakenly stored as the destination.
+            if not dest:
+                words = msg_stripped.split()
+                looks_like_short_answer = (
+                    1 <= len(words) <= 4
+                    and len(msg_stripped) <= 40
+                    and not re.search(r"[\.\d!?]", msg_stripped)
+                )
+                if looks_like_short_answer:
+                    dest = msg_stripped.strip(",.!?")
             if dest:
                 fields["destination"] = dest
                 missing = self.next_missing_field(fields)

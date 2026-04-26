@@ -53,6 +53,11 @@ const ZARAH_GREETINGS = [
   (name) => `Hi there, ${name}! Zarah speaking 🌍 Tell me about your next trip and I'll build a full itinerary with costing.`,
 ];
 
+// Mirrors the backend's _GENERATE_INTENT_RE so the frontend can decide whether
+// to show the heavy "Building your itinerary" pipeline UI or a lightweight
+// "thinking" indicator. Keep these in sync if you change one side.
+const GENERATE_INTENT_RE = /\b(?:generate|create|build|make|prepare|draft|design|put\s+together|plan|give\s+me|i\s+want|i\s+need)\b[^.?!]{0,80}?\b(?:itinerary|trip\s+plan|schedule|day-?by-?day|day\s*plan)\b/i;
+
 // Pipeline stages shown during generation — cumulative delay in ms
 const PIPELINE_STAGES = [
   { id: "parse",    icon: MapPin,      label: "Analyzing your request",        delay: 400  },
@@ -64,21 +69,33 @@ const PIPELINE_STAGES = [
 
 function useLoadingStages(isTyping) {
   const [activeStages, setActiveStages] = useState([]);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const timersRef = useRef([]);
+  const tickRef = useRef(null);
+  const startedAtRef = useRef(null);
 
   useEffect(() => {
     // clear all timers and reset when not typing
     if (!isTyping) {
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+      startedAtRef.current = null;
+      setElapsedSec(0);
       // brief delay before hiding so user sees completion
       const t = setTimeout(() => setActiveStages([]), 600);
       timersRef.current.push(t);
       return;
     }
     setActiveStages([]);
+    setElapsedSec(0);
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
+    startedAtRef.current = Date.now();
+    // Tick once per second so the active stage can show "running for Xs/Xm"
+    tickRef.current = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    }, 1000);
     PIPELINE_STAGES.forEach((stage) => {
       const t = setTimeout(() => {
         setActiveStages((prev) =>
@@ -87,10 +104,13 @@ function useLoadingStages(isTyping) {
       }, stage.delay);
       timersRef.current.push(t);
     });
-    return () => { timersRef.current.forEach(clearTimeout); };
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+      if (tickRef.current) clearInterval(tickRef.current);
+    };
   }, [isTyping]);
 
-  return activeStages;
+  return { activeStages, elapsedSec };
 }
 
 // ── Extract the first valid JSON object from any string (handles LLM preamble) ──
@@ -174,7 +194,7 @@ function QuestionCard({ text, collected, chips, onChipClick }) {
           </div>
         </div>
       )}
-      <p className="text-sm text-gray-800 leading-relaxed">{text}</p>
+      <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed">{text}</p>
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {chips.map((chip) => (
@@ -266,7 +286,7 @@ function formatItinerary(itinerary, response) {
   return lines.join("\n");
 }
 
-function historyToMessages(history = [], lastLlmRaw = null) {
+function historyToMessages(history = [], lastLlmRaw = null, pendingConfirmationCard = null) {
   const msgs = [];
   let id = 1;
   // Find index of the last assistant_raw entry so we can use lastLlmRaw for it
@@ -295,6 +315,22 @@ function historyToMessages(history = [], lastLlmRaw = null) {
       }
     }
   });
+
+  // If the chat is paused on a confirmation card, upgrade the last assistant
+  // message (the confirmation prompt text) to render as an interactive card.
+  if (pendingConfirmationCard) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant" && !msgs[i].itinerary) {
+        msgs[i] = {
+          ...msgs[i],
+          text: "",
+          isConfirmation: true,
+          confirmationFields: pendingConfirmationCard,
+        };
+        break;
+      }
+    }
+  }
   return msgs;
 }
 
@@ -311,13 +347,27 @@ function formatRelativeDate(iso) {
   } catch { return ""; }
 }
 
+const LAST_SESSION_KEY = "zarah:lastChatSessionId";
+
 const Chat = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionIdParam = searchParams.get("session");
+  const isExplicitNew = searchParams.get("new") === "1";
   const outletCtx = useOutletContext() || {};
   const sidebarCollapsed = !!outletCtx.sidebarCollapsed;
+
+  // Restore the last open session when the user lands on /chat without a session param,
+  // unless they explicitly asked for a new chat (?new=1). This makes tab-switching
+  // (Itinerary → Chat) bring them back to the conversation they were in.
+  useEffect(() => {
+    if (sessionIdParam || isExplicitNew) return;
+    const last = (() => {
+      try { return localStorage.getItem(LAST_SESSION_KEY); } catch { return null; }
+    })();
+    if (last) navigate(`/chat?session=${last}`, { replace: true });
+  }, [sessionIdParam, isExplicitNew, navigate]);
 
   const [query,          setQuery]          = useState("");
   const [messages,       setMessages]       = useState([]);
@@ -326,6 +376,10 @@ const Chat = () => {
   const [isEditingName,  setIsEditingName]  = useState(false);
   const [editNameValue,  setEditNameValue]  = useState("");
   const [isTyping,       setIsTyping]       = useState(false);
+  // True only when the in-flight request is a heavyweight itinerary generation,
+  // so the pipeline UI shows for those and a small "thinking" dot animation
+  // shows for plain chat (e.g. "hi", "what's a good destination?").
+  const [isGenerating,   setIsGenerating]   = useState(false);
   const [loadingSession, setLoadingSession] = useState(!!sessionIdParam);
   const [lastError,      setLastError]      = useState(null);
   const [kbWarning,      setKbWarning]      = useState(null);
@@ -339,7 +393,7 @@ const Chat = () => {
   const messagesEndRef   = useRef(null);
   const chatNameInputRef = useRef(null);
   const textareaRef      = useRef(null);
-  const activeStages     = useLoadingStages(isTyping);
+  const { activeStages, elapsedSec } = useLoadingStages(isTyping);
 
   const firstName  = (user?.full_name || user?.username || "there").split(" ")[0];
   // treat a lone greeting as "no real messages" so suggestions stay visible
@@ -390,8 +444,14 @@ const Chat = () => {
         const chat = res.chat ?? res;
         setChatName(chat.chat_name || "Chat");
         setSessionId(chat.session_id ?? sessionIdParam);
-        // Pass last_llm_raw so the final itinerary entry is fully parseable
-        const restored = historyToMessages(chat.history ?? [], chat.last_llm_raw);
+        // Pass last_llm_raw so the final itinerary entry is fully parseable.
+        // pending_confirmation_card (set by backend when chat is paused on a confirmation
+        // gate) tells us to re-render the last assistant message as a ConfirmationCard.
+        const restored = historyToMessages(
+          chat.history ?? [],
+          chat.last_llm_raw,
+          chat.pending_confirmation_card
+        );
         setMessages(restored);
       })
       .catch(() => {
@@ -413,7 +473,14 @@ const Chat = () => {
       const name = msg.length > 45 ? msg.slice(0, 45) + "…" : msg;
       setChatName(name);
     }
+    // Only flag as itinerary-generation when the user clearly asks for one OR
+    // we know we're in a generation flow (already collected fields, awaiting
+    // confirmation, etc). "hi" and casual chat get the lightweight indicator.
+    const looksLikeGenerate =
+      GENERATE_INTENT_RE.test(msg) ||
+      messages.some((m) => m.isConfirmation);          // user is confirming a card
     setIsTyping(true);
+    setIsGenerating(looksLikeGenerate);
     try {
       const currentSid = sessionId;
       const response = await sendChatMessage(currentSid, msg);
@@ -422,16 +489,25 @@ const Chat = () => {
         setSessionId(returnedSid);
         const url = new URL(window.location.href);
         url.searchParams.set("session", returnedSid);
+        url.searchParams.delete("new");
         window.history.replaceState({}, "", url.toString());
       }
+      if (returnedSid) {
+        try { localStorage.setItem(LAST_SESSION_KEY, returnedSid); } catch {}
+      }
       const isConfirmation = !!(response.need_confirmation && response.confirmation_fields);
-      const replyItinerary = isConfirmation
+      const isConversational = !!response.conversational && !!response.reply;
+      const replyItinerary = isConfirmation || isConversational
         ? null
         : (response.itinerary ||
            tryParseJson(response.itinerary_beautified) ||
            tryParseJson(response.llm_raw) ||
            null);
-      const replyText = isConfirmation ? "" : replyItinerary ? "" : formatChatResponse(response);
+      const replyText = isConfirmation
+        ? ""
+        : isConversational
+          ? response.reply
+          : (replyItinerary ? "" : formatChatResponse(response));
       const isQuestion = !isConfirmation && !!(response.need_more && response.prompt);
       const replyMsg = {
         id: Date.now() + 1,
@@ -460,11 +536,33 @@ const Chat = () => {
         updateChatMetadata(returnedSid, { chat_name: name }).catch(() => {});
       }
     } catch (err) {
-      const errMsg = err?.data?.detail || err?.message || "Unknown error";
-      setLastError(errMsg);
-      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "error", text: `⚠️ ${errMsg}` }]);
+      // Network / backend hiccup — instead of a scary "Failed to fetch" toast,
+      // greet the user and steer them toward the four details we actually need.
+      // The real error still goes to the console for devs to debug.
+      console.error("Chat request failed:", err);
+      setLastError(null);   // don't show the error banner — friendly bubble replaces it
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          isFallback: true,
+          fallbackContent: {
+            greeting: `Hi ${firstName}, I'm Zarah — your travel planning assistant.`,
+            intro: "Let's plan your trip together. Could you share a few details?",
+            fields: [
+              { label: "Destination", hint: "country, city, or route (e.g. Singapore or Dubai → Abu Dhabi)" },
+              { label: "Duration",    hint: "number of nights / days (e.g. 5 nights)" },
+              { label: "Travelers",   hint: "how many pax (e.g. 4 adults)" },
+              { label: "Trip type",   hint: "leisure, corporate, honeymoon, incentive, family, etc." },
+            ],
+            outro: 'Optional but helpful: budget, hotel preference, dates, must-do activities. Once you share these, just say "generate itinerary" and I\'ll build a full day-by-day plan.',
+          },
+        },
+      ]);
     } finally {
       setIsTyping(false);
+      setIsGenerating(false);
     }
   }, [query, messages, isTyping, sessionId, chatName]);
 
@@ -479,7 +577,9 @@ const Chat = () => {
     setChatName("New Chat");
     setIsTyping(false);
     setLastError(null);
-    navigate("/chat", { replace: true });
+    try { localStorage.removeItem(LAST_SESSION_KEY); } catch {}
+    // ?new=1 prevents the mount-effect from immediately redirecting back to lastSessionId.
+    navigate("/chat?new=1", { replace: true });
   };
 
   const startEditName  = () => { setEditNameValue(chatName); setIsEditingName(true); };
@@ -494,15 +594,27 @@ const Chat = () => {
   const cancelEditName = () => setIsEditingName(false);
 
   const handleSaveItinerary = useCallback(async (msgId, itinerary) => {
-    if (sessionId) {
-      const payload = { status: "completed" };
-      if (itinerary) payload.saved_itinerary = itinerary;
-      await updateChatMetadata(sessionId, payload).catch(() => {});
-      if (itinerary) generateItineraryPDF(itinerary);
-    }
+    if (!sessionId) return;
+    const suggested = (itinerary?.title
+      || (itinerary?.destination ? `${itinerary.destination} trip` : "")
+      || chatName
+      || "Itinerary").toString().slice(0, 80);
+    const name = window.prompt("Name this itinerary:", suggested);
+    if (name === null) return;          // user cancelled
+    const finalName = name.trim() || suggested;
+    const payload = {
+      itinerary_name: finalName,
+      chat_name: finalName,
+      status: "saved",                   // initial status; user changes later
+    };
+    if (itinerary) payload.saved_itinerary = itinerary;
+    try {
+      await updateChatMetadata(sessionId, payload);
+      setChatName(finalName);
+    } catch {}
     setSavedMsgIds((prev) => new Set([...prev, msgId]));
     navigate("/itineraries");
-  }, [sessionId, navigate]);
+  }, [sessionId, chatName, navigate]);
 
   const handleDiscardItinerary = useCallback((msgId) => {
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
@@ -521,12 +633,12 @@ const Chat = () => {
   };
 
   const inputBar = (
-    <div className="flex items-center bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 px-4 py-2.5 transition-all duration-300 focus-within:shadow-[0_4px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-200">
+    <div className="flex items-center bg-white dark:bg-[#3a3d44] rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10 px-4 py-2.5 transition-all duration-300 focus-within:shadow-[0_4px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-200 dark:focus-within:border-white/20">
       <button
-        className="p-1 text-gray-500 hover:text-gray-700 transition-colors duration-200 cursor-pointer flex-shrink-0"
+        className="p-1 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white transition-colors duration-200 cursor-pointer flex-shrink-0"
         aria-label="Attach file"
       >
-        <Paperclip size={17} />
+        <Paperclip size={18} />
       </button>
       <textarea
         ref={textareaRef}
@@ -540,9 +652,9 @@ const Chat = () => {
         }}
         onKeyDown={handleKeyDown}
         placeholder="Enter your query"
-        className="flex-1 bg-transparent outline-none text-[13.5px] text-gray-800 placeholder-gray-400 px-3 py-1 font-poppins resize-none overflow-y-auto leading-relaxed"
-        style={{ minHeight: "28px", maxHeight: "140px" }}
-        disabled={isTyping || loadingSession}
+        className="flex-1 bg-transparent outline-none text-[15px] text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 px-3 py-1 font-poppins resize-none overflow-y-auto leading-relaxed"
+        style={{ minHeight: "30px", maxHeight: "160px" }}
+        disabled={loadingSession}
         autoFocus={!hasMessages}
       />
       <button
@@ -550,12 +662,12 @@ const Chat = () => {
         disabled={isTyping || loadingSession || !query.trim()}
         className={`p-1 transition-colors duration-200 flex-shrink-0 ${
           query.trim() && !isTyping && !loadingSession
-            ? "text-dark-300 hover:text-black cursor-pointer"
-            : "text-gray-400 cursor-not-allowed"
+            ? "text-dark-300 dark:text-[#FFDE39] hover:text-black dark:hover:brightness-110 cursor-pointer"
+            : "text-gray-400 dark:text-gray-500 cursor-not-allowed"
         }`}
         aria-label="Send"
       >
-        {isTyping ? <RefreshCw size={16} className="animate-spin" /> : <ArrowUp size={18} />}
+        {isTyping ? <RefreshCw size={18} className="animate-spin" /> : <ArrowUp size={20} />}
       </button>
     </div>
   );
@@ -565,31 +677,31 @@ const Chat = () => {
 
       {/* ── History slide-in panel ── */}
       <div
-        className={`absolute inset-y-0 right-0 w-72 bg-white z-30 flex flex-col shadow-[-6px_0_24px_rgba(0,0,0,0.08)] border-l border-gray-100/80 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute inset-y-0 right-0 w-72 bg-white dark:bg-[#3a3d44] z-30 flex flex-col shadow-[-6px_0_24px_rgba(0,0,0,0.08)] border-l border-gray-100/80 dark:border-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           showHistory ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {/* Panel header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#FFFCE6] to-[#FFFAC5] border-b border-[#FFDE39]/25">
-          <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-            <Clock size={14} className="text-[#E6C800]" />
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#FFFCE6] to-[#FFFAC5] dark:from-[#3a3d44] dark:to-[#2c2e34] border-b border-[#FFDE39]/25 dark:border-[#FFDE39]/15">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <Clock size={14} className="text-[#E6C800] dark:text-[#FFDE39]" />
             Chat History
           </h3>
           <button
             onClick={() => setShowHistory(false)}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer rounded"
+            className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-white transition-colors cursor-pointer rounded"
           >
             <X size={15} />
           </button>
         </div>
 
         {/* New chat button */}
-        <div className="px-3 py-2.5 border-b border-gray-100">
+        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-white/10">
           <button
             onClick={() => { handleNewChat(); setShowHistory(false); }}
-            className="w-full flex items-center gap-2 bg-dark-300 text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-dark-200 transition-all duration-300 cursor-pointer"
+            className="w-full flex items-center gap-2 bg-dark-300 dark:bg-[#FFDE39] text-white dark:text-[#1f1f1f] text-xs font-medium px-3 py-2 rounded-lg hover:bg-dark-200 dark:hover:brightness-95 transition-all duration-300 cursor-pointer"
           >
-            <MessageSquarePlus size={13} className="text-[#FFDE39]" />
+            <MessageSquarePlus size={13} className="text-[#FFDE39] dark:text-[#1f1f1f]" />
             New Chat
           </button>
         </div>
@@ -602,8 +714,8 @@ const Chat = () => {
             </div>
           ) : historyList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-              <p className="text-xs text-gray-400">No past chats yet.</p>
-              <p className="text-xs text-gray-300 mt-1">Start a conversation to see history here.</p>
+              <p className="text-xs text-gray-400 dark:text-gray-300">No past chats yet.</p>
+              <p className="text-xs text-gray-300 dark:text-gray-400 mt-1">Start a conversation to see history here.</p>
             </div>
           ) : (
             historyList.map((session) => {
@@ -620,30 +732,34 @@ const Chat = () => {
               const tripInfo = tripParts.join(" · ");
               const statusColor = meta.status === "in_progress" ? "bg-green-400"
                 : meta.status === "completed" ? "bg-blue-400"
-                : "bg-gray-300 group-hover:bg-[#FFDE39]";
+                : "bg-gray-300 dark:bg-white/20 group-hover:bg-[#FFDE39]";
               return (
                 <button
                   key={sid}
                   onClick={() => { navigate(`/chat?session=${sid}`); setShowHistory(false); }}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-all duration-200 cursor-pointer group last:border-0 ${
-                    isActive ? "bg-[#FFFAC5]/80" : "hover:bg-[#FFFCE6]"
+                  className={`w-full text-left px-4 py-3 border-b border-gray-50 dark:border-white/5 transition-all duration-200 cursor-pointer group last:border-0 ${
+                    isActive
+                      ? "bg-[#FFFAC5]/80 dark:bg-[#FFDE39]/15"
+                      : "hover:bg-[#FFFCE6] dark:hover:bg-white/5"
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
                     <div className={`w-1.5 h-1.5 rounded-full mt-[5px] flex-shrink-0 transition-colors ${
-                      isActive ? "bg-[#E6C800]" : statusColor
+                      isActive ? "bg-[#E6C800] dark:bg-[#FFDE39]" : statusColor
                     }`} />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium truncate transition-colors ${
-                        isActive ? "text-gray-900" : "text-gray-700 group-hover:text-gray-900"
+                        isActive
+                          ? "text-gray-900 dark:text-white"
+                          : "text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white"
                       }`}>
                         {name}
                       </p>
                       {tripInfo && (
-                        <p className="text-[10px] text-gray-400 truncate mt-0.5">{tripInfo}</p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-400 truncate mt-0.5">{tripInfo}</p>
                       )}
                       {date && (
-                        <p className="text-[10px] text-gray-300 mt-0.5">{date}</p>
+                        <p className="text-[10px] text-gray-300 dark:text-gray-500 mt-0.5">{date}</p>
                       )}
                     </div>
                   </div>
@@ -664,15 +780,15 @@ const Chat = () => {
 
       {/* ── Loading ── */}
       {loadingSession ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-100 rounded-2xl">
-          <RefreshCw size={24} className="animate-spin text-gray-400" />
+        <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-[#3a3d44] rounded-2xl">
+          <RefreshCw size={24} className="animate-spin text-gray-400 dark:text-gray-300" />
         </div>
 
       ) : !hasMessages ? (
         /* ── Empty state ── */
-        <div className="flex-1 flex flex-col px-2 sm:px-4 py-1.5 relative animate-fadeIn">
-          {/* History pill — top-right */}
-          <div className="flex justify-end">
+        <div className="flex-1 flex flex-col animate-fadeIn min-h-0">
+          {/* History pill — outside the chat panel, top-right of the page area */}
+          <div className="flex justify-end mb-2 flex-shrink-0">
             <button
               onClick={openHistory}
               className="flex items-center gap-1.5 bg-dark-300 text-white text-[12px] font-medium px-3.5 py-1.5 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.08)] hover:bg-dark-200 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
@@ -682,42 +798,46 @@ const Chat = () => {
             </button>
           </div>
 
+          {/* Chat panel — narrower than full container, centered */}
+          <div className="mx-auto w-full max-w-[1440px] flex-1 flex flex-col px-4 sm:px-6 py-3 relative rounded-2xl bg-[#f3f1ec] dark:bg-[#2c2e34]/60 border-2 border-transparent focus-within:border-[#FFDE39]/55 focus-within:shadow-[0_6px_28px_-4px_rgba(255,222,57,0.18)] focus-within:bg-[#ebe8e1] dark:focus-within:bg-white/[0.04] transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
+
           {/* Centered greeting + input + suggestion cards */}
           <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="w-full max-w-[600px]">
+            <div className="w-full max-w-[760px]">
               {/* Greeting block — left-aligned to match Figma */}
-              <div className="mb-5 pl-1">
-                <p className="text-[14px] text-[#1f1f1f] font-normal mb-0.5 font-poppins">
+              <div className="mb-6 pl-1">
+                <p className="text-[16px] text-[#1f1f1f] dark:text-gray-300 font-normal mb-1 font-poppins">
                   Hello <span className="text-[#E6C800] font-medium">{firstName}</span>
                 </p>
-                <h1 className="text-[26px] sm:text-[28px] font-bold text-[#1f1f1f] leading-tight font-poppins tracking-tight">
+                <h1 className="text-[30px] sm:text-[34px] font-bold text-[#1f1f1f] dark:text-white leading-tight font-poppins tracking-tight">
                   {welcomeLine}
                 </h1>
               </div>
 
               {inputBar}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => handleSend(s.text)}
-                    className="text-left bg-white rounded-xl border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] p-3 text-[10.5px] text-gray-500 leading-[1.45] hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 hover:border-gray-200 transition-all duration-300 group flex flex-col justify-between min-h-[78px] font-poppins"
+                    className="text-left bg-white dark:bg-[#3a3d44] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] p-3.5 text-[12px] text-gray-600 dark:text-gray-300 leading-[1.5] hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 hover:border-gray-200 dark:hover:border-white/20 transition-all duration-300 group flex flex-col justify-between min-h-[88px] font-poppins"
                   >
                     <span className="line-clamp-3">{s.text}</span>
-                    <ArrowRight size={11} className="mt-1.5 text-gray-400 group-hover:text-gray-700 transition-colors duration-200 self-end" />
+                    <ArrowRight size={13} className="mt-1.5 text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white transition-colors duration-200 self-end" />
                   </button>
                 ))}
               </div>
             </div>
           </div>
+          </div>
         </div>
 
       ) : (
         /* ── Active chat ── */
-        <div className="flex-1 flex flex-col overflow-hidden animate-fadeIn">
+        <div className="mx-auto w-full max-w-[1620px] flex-1 flex flex-col overflow-hidden animate-fadeIn bg-[#f3f1ec] dark:bg-[#2c2e34]/60 rounded-2xl p-3 border-2 border-transparent focus-within:border-[#FFDE39]/45 focus-within:shadow-[0_6px_28px_-4px_rgba(255,222,57,0.14)] transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
           {/* Sub-header strip — chat title + actions, full width (no outer gutter) */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-2.5 flex items-center justify-between mb-3 flex-shrink-0">
+          <div className="bg-white dark:bg-[#3a3d44] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-2.5 flex items-center justify-between mb-3 flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <MessageSquare size={14} className="text-[#E6C800] flex-shrink-0" />
               {isEditingName ? (
@@ -727,18 +847,18 @@ const Chat = () => {
                     value={editNameValue}
                     onChange={(e) => setEditNameValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") cancelEditName(); }}
-                    className="text-[13px] font-medium text-gray-800 bg-gray-50 rounded-md px-2 py-0.5 outline-none border border-gray-300 focus:border-brand-400 transition-colors duration-200 font-poppins"
+                    className="text-[13px] font-medium text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-white/10 rounded-md px-2 py-0.5 outline-none border border-gray-300 dark:border-white/20 focus:border-brand-400 transition-colors duration-200 font-poppins"
                   />
                   <button onClick={saveName} className="p-0.5 text-green-500 hover:text-green-600 cursor-pointer"><Check size={13} /></button>
                   <button onClick={cancelEditName} className="p-0.5 text-gray-400 hover:text-gray-600 cursor-pointer"><X size={13} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group min-w-0">
-                  <h2 className="text-[13px] font-medium text-gray-800 font-poppins truncate">{chatName}</h2>
+                  <h2 className="text-[13px] font-medium text-gray-800 dark:text-gray-100 font-poppins truncate">{chatName}</h2>
                   <button
                     onClick={startEditName}
                     title="Rename chat"
-                    className="p-0.5 text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer flex-shrink-0"
+                    className="p-0.5 text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer flex-shrink-0"
                   >
                     <Pencil size={12} />
                   </button>
@@ -748,16 +868,16 @@ const Chat = () => {
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={handleNewChat}
-                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700 hover:text-[#1f1f1f] hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
+                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700 dark:text-gray-200 hover:text-[#1f1f1f] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5 px-2.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
               >
-                <MessageSquarePlus size={13} className="text-gray-500" />
+                <MessageSquarePlus size={13} className="text-gray-500 dark:text-gray-300" />
                 New Chat
               </button>
               <button
                 onClick={openHistory}
-                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700 hover:text-[#1f1f1f] hover:bg-gray-50 px-2.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
+                className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700 dark:text-gray-200 hover:text-[#1f1f1f] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5 px-2.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
               >
-                <Clock size={13} className="text-gray-500" />
+                <Clock size={13} className="text-gray-500 dark:text-gray-300" />
                 History
               </button>
             </div>
@@ -776,7 +896,7 @@ const Chat = () => {
                 if (msg.role === "user") {
                   return (
                     <div key={msg.id} className="flex justify-end animate-fadeIn">
-                      <div className="bg-white rounded-xl px-3.5 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.03)] border border-gray-200/80 max-w-[70%] text-[12.5px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+                      <div className="bg-white dark:bg-[#3a3d44] rounded-xl px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] border border-gray-200/80 dark:border-white/10 max-w-[70%] text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">
                         {msg.text}
                       </div>
                     </div>
@@ -805,11 +925,41 @@ const Chat = () => {
                   );
                 }
 
+                if (msg.isFallback && msg.fallbackContent) {
+                  const fb = msg.fallbackContent;
+                  return (
+                    <div key={msg.id} className="flex justify-start animate-fadeIn">
+                      <div className="bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-2xl px-5 py-4 max-w-[640px] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <p className="text-[14px] font-semibold text-gray-900 dark:text-white">
+                          {fb.greeting}
+                        </p>
+                        <p className="text-[13px] text-gray-700 dark:text-gray-300 mt-1.5 leading-relaxed">
+                          {fb.intro}
+                        </p>
+                        <ul className="mt-3 space-y-1.5">
+                          {fb.fields.map((f) => (
+                            <li key={f.label} className="flex gap-2 text-[13px] leading-relaxed">
+                              <span className="text-[#E6C800] mt-0.5">•</span>
+                              <span>
+                                <span className="font-semibold text-gray-900 dark:text-white">{f.label}</span>
+                                <span className="text-gray-600 dark:text-gray-400"> — {f.hint}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-[12.5px] text-gray-500 dark:text-gray-400 mt-3 leading-relaxed">
+                          {fb.outro}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (isItinerary) {
                   // Itinerary card stays white per spec — design unchanged
                   return (
                     <div key={msg.id} className="flex justify-start animate-fadeIn">
-                      <div className="w-full bg-white rounded-xl px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] border border-gray-100">
+                      <div className="w-full bg-white dark:bg-[#3a3d44] rounded-xl px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10">
                         <Sparkles size={15} className="text-[#FFDE39] fill-[#FFDE39] mb-2.5" />
                         <ItineraryDisplay
                           itinerary={itineraryObj}
@@ -833,8 +983,8 @@ const Chat = () => {
                         background: "linear-gradient(135deg, #FFF690 0%, #E9E6CA 100%)",
                       }}
                     >
-                      <div className="bg-white rounded-[11px] px-4 py-3">
-                        <Sparkles size={18} className="text-[#1f1f1f] fill-[#1f1f1f] mb-2" />
+                      <div className="bg-white dark:bg-[#3a3d44] rounded-[11px] px-4 py-3">
+                        <Sparkles size={18} className="text-[#1f1f1f] dark:text-[#FFDE39] fill-[#1f1f1f] dark:fill-[#FFDE39] mb-2" />
                         {msg.isQuestion ? (
                           <QuestionCard
                             text={msg.text}
@@ -843,7 +993,7 @@ const Chat = () => {
                             onChipClick={(chip) => handleSend(chip)}
                           />
                         ) : (
-                          <p className="text-[12.5px] text-gray-800 leading-relaxed whitespace-pre-wrap font-poppins">
+                          <p className="text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-poppins">
                             {msg.text}
                           </p>
                         )}
@@ -853,7 +1003,17 @@ const Chat = () => {
                 );
               })}
 
-              {isTyping && (
+              {isTyping && !isGenerating && (
+                <div className="flex justify-start animate-fadeIn">
+                  <div className="bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "120ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "240ms" }} />
+                  </div>
+                </div>
+              )}
+
+              {isTyping && isGenerating && (
                 <div className="flex justify-start animate-fadeIn">
                   <div
                     className="rounded-xl min-w-[240px] shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
@@ -862,38 +1022,74 @@ const Chat = () => {
                       background: "linear-gradient(135deg, #FFF690 0%, #E9E6CA 100%)",
                     }}
                   >
-                    <div className="bg-white rounded-[11px] px-4 py-3">
-                      <Sparkles size={18} className="text-[#1f1f1f] fill-[#1f1f1f] mb-2" />
-                      <p className="text-[10px] font-semibold text-gray-600 mb-2.5 tracking-wide uppercase">Building your itinerary</p>
+                    <div className="bg-white dark:bg-[#3a3d44] rounded-[11px] px-4 py-3">
+                      <Sparkles size={18} className="text-[#1f1f1f] dark:text-[#FFDE39] fill-[#1f1f1f] dark:fill-[#FFDE39] mb-2" />
+                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-3 tracking-wide uppercase">Building your itinerary</p>
                       <div className="space-y-2">
-                        {PIPELINE_STAGES.map((stage) => {
-                          const StageIcon = stage.icon;
-                          const done = activeStages.includes(stage.id);
-                          const isLast = stage.id === PIPELINE_STAGES[PIPELINE_STAGES.length - 1].id;
-                          const isActive = done && isLast;
-                          return (
-                            <div key={stage.id} className={`flex items-center gap-2 transition-all duration-500 ${done ? "opacity-100" : "opacity-25"}`}>
-                              <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                                done && isActive ? "bg-[#FFDE39]" : done ? "bg-green-100" : "bg-gray-100"
-                              }`}>
-                                {done && !isActive
-                                  ? <Check size={9} className="text-green-600" />
-                                  : <StageIcon size={9} className={done ? "text-dark-300" : "text-gray-400"} />
-                                }
-                              </div>
-                              <span className={`text-[11px] transition-colors duration-300 ${done ? "text-gray-800 font-medium" : "text-gray-500"}`}>
-                                {stage.label}
-                              </span>
-                              {done && isActive && (
-                                <RefreshCw size={10} className="animate-spin text-gray-500 ml-auto" />
-                              )}
-                              {done && !isActive && (
-                                <span className="ml-auto text-[9px] text-green-600 font-medium">Done</span>
-                              )}
-                            </div>
+                        {(() => {
+                          // Find the highest-index stage that has fired — that one is "current"
+                          // (shows the spinner). Earlier stages show Done. Later ones are muted.
+                          const lastDoneIdx = PIPELINE_STAGES.reduce(
+                            (acc, s, idx) => (activeStages.includes(s.id) ? idx : acc),
+                            -1
                           );
-                        })}
+                          return PIPELINE_STAGES.map((stage, idx) => {
+                            const StageIcon = stage.icon;
+                            const status =
+                              idx < lastDoneIdx ? "past"
+                              : idx === lastDoneIdx ? "current"
+                              : "future";
+                            return (
+                              <div
+                                key={stage.id}
+                                className={`flex items-center gap-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                  status === "future" ? "opacity-30" : "opacity-100 animate-fadeIn"
+                                }`}
+                              >
+                                <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                                  status === "current" ? "bg-[#FFDE39] dark:bg-[#FFDE39] scale-110"
+                                  : status === "past"  ? "bg-green-100 dark:bg-green-900/40"
+                                  : "bg-gray-100 dark:bg-white/10"
+                                }`}>
+                                  {status === "past"
+                                    ? <Check size={9} className="text-green-600 dark:text-green-400" />
+                                    : <StageIcon size={9} className={
+                                        status === "current" ? "text-dark-300"
+                                        : "text-gray-400 dark:text-gray-500"
+                                      } />}
+                                </div>
+                                <span className={`text-[12.5px] transition-colors duration-300 ${
+                                  status === "current" ? "text-gray-900 dark:text-white font-semibold"
+                                  : status === "past" ? "text-gray-700 dark:text-gray-300 font-medium"
+                                  : "text-gray-500 dark:text-gray-400"
+                                }`}>
+                                  {stage.label}
+                                </span>
+                                {status === "current" && (
+                                  <span className="ml-auto flex items-center gap-1.5">
+                                    {elapsedSec > 0 && (
+                                      <span className="text-[10px] tabular-nums text-gray-500 dark:text-gray-400 font-medium">
+                                        {elapsedSec < 60
+                                          ? `${elapsedSec}s`
+                                          : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`}
+                                      </span>
+                                    )}
+                                    <RefreshCw size={10} className="animate-spin text-gray-500 dark:text-gray-300" />
+                                  </span>
+                                )}
+                                {status === "past" && (
+                                  <span className="ml-auto text-[9px] text-green-600 dark:text-green-400 font-medium">Done</span>
+                                )}
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
+                      {elapsedSec > 30 && (
+                        <p className="mt-3 pt-2.5 border-t border-gray-100 dark:border-white/10 text-[10.5px] text-gray-500 dark:text-gray-400 leading-snug">
+                          Generating a full day-by-day itinerary on a local LLM can take a few minutes — this is the slow step. Hold tight, your itinerary will appear automatically when ready.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

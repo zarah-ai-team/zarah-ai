@@ -28,11 +28,13 @@ class LocalLLMClient:
     def __init__(self, base_url: str = ""):
         self.base_url = (base_url or _OLLAMA_BASE_URL).rstrip("/")
         self.logger = logging.getLogger("local_llm_client")
-        # default read timeout for LLM responses (seconds); can be overridden via env var
+        # Default read timeout for LLM responses (seconds); overridable via LOCAL_LLM_TIMEOUT.
+        # llama3:8b on CPU-only hardware can take 5-10 minutes to emit a full 4096-token
+        # itinerary, so a generous default avoids spurious timeouts.
         try:
-            self.read_timeout = int(os.getenv("LOCAL_LLM_TIMEOUT", "300"))
+            self.read_timeout = int(os.getenv("LOCAL_LLM_TIMEOUT", "900"))
         except Exception:
-            self.read_timeout = 300
+            self.read_timeout = 900
 
     def generate(self, system_prompt: str, messages: List[Dict[str, Any]], model: str = "") -> str:
         """Call Ollama and return assistant text.

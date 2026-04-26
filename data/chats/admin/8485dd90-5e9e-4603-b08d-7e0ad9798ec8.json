@@ -1,0 +1,70 @@
+{
+  "session_id": "8485dd90-5e9e-4603-b08d-7e0ad9798ec8",
+  "username": "admin",
+  "chat_name": "4N Abu Dhabi · 45 Pax",
+  "name_auto": true,
+  "created_at": "2026-04-26T09:43:48.014576Z",
+  "updated_at": "2026-04-26T09:46:16.511449Z",
+  "metadata": {
+    "status": "in_progress",
+    "itinerary_name": "Abu Dhabi Trip",
+    "travelers_max": 45,
+    "duration": "4"
+  },
+  "fields": {
+    "destination": "Abu Dhabi",
+    "pax": 45,
+    "budget_per_person": 45.0,
+    "event_type": "incentive",
+    "client_type": "corporate",
+    "hotel_type": "mid-range",
+    "client_industry": "other",
+    "duration": 4
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Create a 4N/5D incentive trip itinerary for Abu Dhabi for 45 people"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: Abu Dhabi\nDuration: 4 nights / 5 days\nPax: 45 adults\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: Abu Dhabi\nDuration: 4 nights / 5 days\nPax: 45 adults\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "user",
+      "content": "confirm"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: Abu Dhabi\nDuration: 4 nights / 5 days\nPax: 45 adults\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T09:43:54.269372Z] User confirmed trip details; proceeding to itinerary generation",
+    "[2026-04-26T09:43:54.269372Z] Using client_type from session field: 'corporate'",
+    "[2026-04-26T09:43:54.278521Z] Loaded 2 user KB documents for query='Abu Dhabi incentive'",
+    "[2026-04-26T09:43:54.279522Z] Started enrichment for destination(s)='Abu Dhabi'",
+    "[2026-04-26T09:46:01.008210Z] User confirmed trip details; proceeding to itinerary generation",
+    "[2026-04-26T09:46:01.009217Z] Using client_type from session field: 'corporate'",
+    "[2026-04-26T09:46:01.017210Z] Loaded 2 user KB documents for query='Abu Dhabi incentive'",
+    "[2026-04-26T09:46:01.020212Z] Started enrichment for destination(s)='Abu Dhabi'"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null
+}

@@ -34,6 +34,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     doLogout();
+    try { localStorage.removeItem("zarah:lastChatSessionId"); } catch {}
     setUser(null);
   }, []);
 

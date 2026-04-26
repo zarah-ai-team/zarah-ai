@@ -37,9 +37,11 @@ const ConfirmationCard = ({ fields, onConfirm }) => {
   return (
     <div className="bg-white border border-brand-200 rounded-2xl overflow-hidden shadow-sm max-w-[480px] w-full">
       {/* Header */}
-      <div className="bg-gradient-to-r from-brand-50 to-yellow-50 px-4 py-3 border-b border-brand-100 flex items-center gap-2">
-        <MapPin size={14} className="text-brand-500 flex-shrink-0" />
-        <p className="text-xs font-semibold text-gray-700">Trip Details — Please Review</p>
+      <div className="bg-gradient-to-r from-brand-50 to-yellow-50 dark:from-[#3a3d44] dark:to-[#2c2e34] px-4 py-3 border-b border-brand-100 dark:border-[#FFDE39]/20 flex items-center gap-2.5">
+        <span className="w-7 h-7 rounded-full bg-[#FFDE39] flex items-center justify-center shadow-[0_2px_6px_rgba(255,222,57,0.45)] flex-shrink-0">
+          <MapPin size={15} className="text-[#1f1f1f]" strokeWidth={2.5} />
+        </span>
+        <p className="text-[13px] font-semibold text-gray-800 dark:text-white">Trip Details — Please Review</p>
       </div>
 
       {/* Fields */}

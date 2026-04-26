@@ -1,12 +1,41 @@
 """wikipedia_lookup.py
-Lightweight helper to search Wikipedia for a destination and return top attractions and short summaries.
-Uses the public Wikipedia REST API (no external dependencies required beyond requests).
+Lightweight helper to search Wikipedia for a destination and return top attractions
+and short summaries. Uses the public Wikipedia API.
+
+Wikimedia Foundation User-Agent Policy (must comply or requests are 403'd):
+  https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+
+Required format:
+  <client>/<version> (<contact URL or email>) <library>/<version>
+
+The contact MUST be reachable — fake placeholder emails (anything @example.com,
+@example.org, or a .example TLD) get flagged and rejected by some edge nodes.
 """
+import os
 import requests
 from typing import List, Dict, Any
 
 WIKI_SEARCH_URL = "https://en.wikipedia.org/w/api.php"
 WIKI_REST_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+
+# Build a policy-compliant User-Agent. Project URL acts as the verifiable contact.
+# Both pieces are env-overridable for production deployments.
+_REQUESTS_VER = getattr(requests, "__version__", "2")
+_PROJECT_URL = os.getenv("WIKI_CONTACT_URL", "https://github.com/zarah-ai-team/zarah-ai")
+_CONTACT_EMAIL = os.getenv("WIKI_CONTACT_EMAIL", "")
+_CONTACT_BLOCK = (
+    f"{_PROJECT_URL}; {_CONTACT_EMAIL}" if _CONTACT_EMAIL else _PROJECT_URL
+)
+_DEFAULT_UA = (
+    f"ZarahAI-TravelChatbot/1.0 ({_CONTACT_BLOCK}) "
+    f"python-requests/{_REQUESTS_VER}"
+)
+_WIKI_HEADERS = {
+    "User-Agent": os.getenv("WIKI_USER_AGENT", _DEFAULT_UA),
+    "Accept": "application/json",
+    # Api-User-Agent is honored by some Wikimedia services in addition to UA.
+    "Api-User-Agent": os.getenv("WIKI_USER_AGENT", _DEFAULT_UA),
+}
 
 
 def search_wikipedia(title: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -19,7 +48,7 @@ def search_wikipedia(title: str, limit: int = 5) -> List[Dict[str, Any]]:
         'srlimit': limit
     }
     try:
-        r = requests.get(WIKI_SEARCH_URL, params=params, timeout=8)
+        r = requests.get(WIKI_SEARCH_URL, params=params, headers=_WIKI_HEADERS, timeout=8)
         r.raise_for_status()
         data = r.json()
         results = data.get('query', {}).get('search', [])
@@ -33,7 +62,7 @@ def get_summary_for_title(title: str) -> Dict[str, Any]:
     try:
         # encode title for URL
         url = WIKI_REST_SUMMARY + requests.utils.quote(title)
-        r = requests.get(url, timeout=8)
+        r = requests.get(url, headers=_WIKI_HEADERS, timeout=8)
         r.raise_for_status()
         data = r.json()
         return {

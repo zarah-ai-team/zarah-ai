@@ -1,10 +1,53 @@
 [
   {
+    "doc_id": "2f425864-cd1",
+    "filename": "Salalah FIT - Tripindeal (Sep 2025).docx",
+    "s3_key": "documents/2f425864-cd1/Salalah FIT - Tripindeal (Sep 2025).docx",
+    "storage_uri": "file://data\\uploads\\documents\\2f425864-cd1\\Salalah FIT - Tripindeal (Sep 2025).docx",
+    "processed_at": "2026-04-25T00:23:53.791776Z",
+    "text_preview": "Destination:\t\t\tSalalah, Oman\t\t\t\nNumber of pax:\t\t02 Adults\nTravel Dates:\t\t\t17th Sept’25  - 21st Sept’25 \nArrival/Departure Flight:\tQR 1130 (2205)/ QR1131 (2310)\t\nItinerary:\n17th Sept/Wed:\t\t\tArrival in Salalah \nArrival at Muscat International Airport.\nMeet our English-speaking driver & transfer to your hotel\nOvernight in Rotana Salahah\n18th Sept/Thurs:  \t\tClassic Salalah Full Day City Tour\nStart our",
+    "char_count": 4494,
+    "hints": {
+      "cities_mentioned": [
+        "Muscat",
+        "Oman"
+      ],
+      "pricing_lines": [
+        ", ",
+        "\t\t02 ",
+        "\t\t\t17",
+        "25  ",
+        " 21",
+        "25 \n",
+        " 1130 ",
+        "2205",
+        "1131 ",
+        "2310",
+        "\n17",
+        "\n18",
+        ", ",
+        ", ",
+        ", ",
+        ", ",
+        ", ",
+        ", ",
+        ", ",
+        "\n19"
+      ],
+      "hotel_mentions": [
+        "hotel",
+        "hotel. Our driver will be waiting in the lobby to transfer you to Salalah Airport as",
+        "hotel in a standard car"
+      ]
+    },
+    "full_text_path": "data\\user_kb_docs\\2f425864-cd1.txt"
+  },
+  {
     "doc_id": "eb932b68-d7e",
     "filename": "Oman in Regular I - FD .docx",
     "s3_key": "documents/eb932b68-d7e/Oman in Regular I - FD .docx",
     "storage_uri": "file://data\\uploads\\documents\\eb932b68-d7e\\Oman in Regular I - FD .docx",
-    "processed_at": "2026-04-24T23:49:14.105957Z",
+    "processed_at": "2026-04-26T12:19:47.908027Z",
     "text_preview": "Itinerary Name:\t\t\tOman in Regular (Fixed Departure)\nNumber of pax:\t\t\tMinimum 02 Adults\nTravel Duration:\t\t\t7 Days & 6 Nights \t\t\t\nItinerary:\nDay 01:\t\t\tArrival in Muscat\nArrival at Muscat International Airport. Visa procedures will be completed. Luggage collection and chauffeur-driven transfer to your hotel in Muscat. Overnight at the hotel.\nOvernight in Muscat \nDay 02:\t\t\tHalf Day Sightseeing of Bark",
     "char_count": 6997,
     "hints": {
@@ -48,48 +91,5 @@
       ]
     },
     "full_text_path": "data\\user_kb_docs\\eb932b68-d7e.txt"
-  },
-  {
-    "doc_id": "2f425864-cd1",
-    "filename": "Salalah FIT - Tripindeal (Sep 2025).docx",
-    "s3_key": "documents/2f425864-cd1/Salalah FIT - Tripindeal (Sep 2025).docx",
-    "storage_uri": "file://data\\uploads\\documents\\2f425864-cd1\\Salalah FIT - Tripindeal (Sep 2025).docx",
-    "processed_at": "2026-04-25T00:23:53.791776Z",
-    "text_preview": "Destination:\t\t\tSalalah, Oman\t\t\t\nNumber of pax:\t\t02 Adults\nTravel Dates:\t\t\t17th Sept’25  - 21st Sept’25 \nArrival/Departure Flight:\tQR 1130 (2205)/ QR1131 (2310)\t\nItinerary:\n17th Sept/Wed:\t\t\tArrival in Salalah \nArrival at Muscat International Airport.\nMeet our English-speaking driver & transfer to your hotel\nOvernight in Rotana Salahah\n18th Sept/Thurs:  \t\tClassic Salalah Full Day City Tour\nStart our",
-    "char_count": 4494,
-    "hints": {
-      "cities_mentioned": [
-        "Muscat",
-        "Oman"
-      ],
-      "pricing_lines": [
-        ", ",
-        "\t\t02 ",
-        "\t\t\t17",
-        "25  ",
-        " 21",
-        "25 \n",
-        " 1130 ",
-        "2205",
-        "1131 ",
-        "2310",
-        "\n17",
-        "\n18",
-        ", ",
-        ", ",
-        ", ",
-        ", ",
-        ", ",
-        ", ",
-        ", ",
-        "\n19"
-      ],
-      "hotel_mentions": [
-        "hotel",
-        "hotel. Our driver will be waiting in the lobby to transfer you to Salalah Airport as",
-        "hotel in a standard car"
-      ]
-    },
-    "full_text_path": "data\\user_kb_docs\\2f425864-cd1.txt"
   }
 ]

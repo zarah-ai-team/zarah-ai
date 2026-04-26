@@ -53,11 +53,11 @@ export async function fetchDashboardStats() {
     const chats = chatsRes?.chats ?? [];
     const clients = clientsRes?.clients ?? [];
 
-    const active = chats.filter(
-      (c) => c.metadata?.status === "in_progress" || c.metadata?.status === "completed"
-    ).length;
+    // "Active" = ongoing trips only (status: in_progress).
+    // Saved / draft / completed are tracked separately so the badge isn't inflated.
+    const active = chats.filter((c) => c.metadata?.status === "in_progress").length;
     const drafts = chats.filter(
-      (c) => !c.metadata?.status || c.metadata?.status === "draft"
+      (c) => c.metadata?.status === "saved" || c.metadata?.status === "draft" || !c.metadata?.status
     ).length;
     const completed = chats.filter((c) => c.metadata?.status === "completed").length;
 

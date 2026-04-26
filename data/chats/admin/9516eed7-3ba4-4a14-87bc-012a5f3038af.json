@@ -1,0 +1,34 @@
+{
+  "session_id": "9516eed7-3ba4-4a14-87bc-012a5f3038af",
+  "username": "admin",
+  "chat_name": "Hi",
+  "name_auto": true,
+  "created_at": "2026-04-26T12:35:32.175977Z",
+  "updated_at": "2026-04-26T12:35:32.527529Z",
+  "metadata": {
+    "status": "draft",
+    "itinerary_name": "Hi Trip"
+  },
+  "fields": {
+    "hotel_type": "mid-range",
+    "client_type": "leisure",
+    "client_industry": "other",
+    "destination": "Hi"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Hi"
+    },
+    {
+      "role": "assistant",
+      "content": "How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    }
+  ],
+  "sanity_checks": [],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

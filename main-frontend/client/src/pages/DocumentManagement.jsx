@@ -27,6 +27,38 @@ import {
 } from "../services/documentService";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE } from "../services/api";
+import PortalMenu from "../components/common/PortalMenu";
+
+/** Per-row action menu rendered via PortalMenu so it isn't clipped by the table card. */
+function DocActionMenu({ open, onToggle, onClose, onReprocess, onDelete }) {
+  const triggerRef = useRef(null);
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={onToggle}
+        className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-all duration-200"
+        aria-label="Actions"
+      >
+        <MoreVertical size={14} />
+      </button>
+      <PortalMenu open={open} anchorRef={triggerRef} onClose={onClose} width={172}>
+        <button
+          onClick={() => { onReprocess(); onClose(); }}
+          className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+        >
+          <RefreshCw size={12} /> Reprocess KB
+        </button>
+        <button
+          onClick={() => { onDelete(); onClose(); }}
+          className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+        >
+          <Trash2 size={12} /> Delete
+        </button>
+      </PortalMenu>
+    </>
+  );
+}
 
 const ITEMS_PER_PAGE = 10;
 
@@ -596,30 +628,13 @@ const DocumentManagement = () => {
                             <KbBadge status={doc.kb_status} />
                           </td>
                           <td className="px-5 py-3 whitespace-nowrap">
-                            <div className="relative" ref={menuOpenId === docId ? menuRef : null}>
-                              <button
-                                onClick={() => setMenuOpenId(menuOpenId === docId ? null : docId)}
-                                className="p-1 text-gray-400 hover:text-gray-700 transition-all duration-200"
-                              >
-                                <MoreVertical size={14} />
-                              </button>
-                              {menuOpenId === docId && (
-                                <div className="absolute right-0 top-7 z-10 bg-white border border-gray-100 rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.10)] py-1 min-w-[160px]">
-                                  <button
-                                    onClick={() => handleReprocess(docId)}
-                                    className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-gray-700 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <RefreshCw size={12} /> Reprocess KB
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(docId)}
-                                    className="w-full text-left flex items-center gap-2 px-3.5 py-2 text-[12.5px] text-red-600 hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 size={12} /> Delete
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                            <DocActionMenu
+                              open={menuOpenId === docId}
+                              onToggle={() => setMenuOpenId(menuOpenId === docId ? null : docId)}
+                              onClose={() => setMenuOpenId(null)}
+                              onReprocess={() => handleReprocess(docId)}
+                              onDelete={() => handleDelete(docId)}
+                            />
                           </td>
                         </tr>
                       );

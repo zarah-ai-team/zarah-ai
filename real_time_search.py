@@ -2,12 +2,23 @@
 Real-time search integration for Wikipedia, attractions, news, Google Search, and travel pricing.
 All APIs are completely free and require NO API keys.
 """
+import os
 import re
 import requests
 from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger("real_time_search")
+
+# Overpass API rejects requests without a descriptive UA (returns 406 Not Acceptable).
+# It also wants a JSON-friendly Accept and POSTs for large queries.
+_OVERPASS_HEADERS = {
+    "User-Agent": os.getenv(
+        "OVERPASS_USER_AGENT",
+        f"ZarahAI-TravelAssistant/1.0 ({os.getenv('WIKI_CONTACT_EMAIL', 'support@zarah-ai.example')})",
+    ),
+    "Accept": "application/json",
+}
 
 # ============ GOOGLE SEARCH (Free via googlesearch-python) ============
 def google_search(query: str, num_results: int = 5) -> List[Dict[str, str]]:
@@ -125,7 +136,7 @@ def search_nearby_attractions(latitude: float, longitude: float, radius: int = 5
         out center {limit};
         """
         
-        r = requests.get(overpass_url, params={'data': query}, timeout=10)
+        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=15)
         r.raise_for_status()
         data = r.json()
         
@@ -171,7 +182,7 @@ def search_attractions_by_name(city: str, category: str = None, limit: int = 10)
         else:
             query = f'[bbox:-90,-180,90,180];(node["name"~"{city}"];way["name"~"{city}"];node["tourism"]["name"~"{city}"];way["tourism"]["name"~"{city}"];);out center {limit};'
         
-        r = requests.get(overpass_url, params={'data': query}, timeout=10)
+        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=15)
         r.raise_for_status()
         data = r.json()
         

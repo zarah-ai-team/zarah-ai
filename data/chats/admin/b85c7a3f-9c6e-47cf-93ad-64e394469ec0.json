@@ -1,0 +1,60 @@
+{
+  "session_id": "b85c7a3f-9c6e-47cf-93ad-64e394469ec0",
+  "username": "admin",
+  "chat_name": "5N Estimate · 5 Pax",
+  "name_auto": true,
+  "created_at": "2026-04-26T13:00:39.164461Z",
+  "updated_at": "2026-04-26T13:00:48.546051Z",
+  "metadata": {
+    "status": "in_progress",
+    "itinerary_name": "Estimate Trip",
+    "travelers_max": 5,
+    "duration": "5"
+  },
+  "fields": {
+    "destination": "Estimate",
+    "event_type": "retreat",
+    "client_type": "corporate",
+    "hotel_type": "mid-range",
+    "client_industry": "other",
+    "duration": 5,
+    "pax": 5
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Estimate the total trip cost per person for this Dubai corporate retreat"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — trip to Estimate, retreat vibe. How long is the trip? For example: 5 nights, 7 days, or 4N/5D."
+    },
+    {
+      "role": "user",
+      "content": "5 days"
+    },
+    {
+      "role": "assistant",
+      "content": "Here are the trip details I've captured. Please review and confirm, or tell me what to change:\n\nDestination: Estimate\nDuration: 5 nights / 6 days\nPax: 5 adults\n\nReply 'confirm' to generate the itinerary, or tell me what to change (e.g. 'change pax to 6', 'upgrade to 5-star')."
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T13:00:39.151463Z] Conversational mode: progressive field collector",
+    "[2026-04-26T13:00:48.473288Z] Conversational mode: progressive field collector"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": {
+    "fields": {
+      "destination": "Estimate",
+      "event_type": "retreat",
+      "client_type": "corporate",
+      "hotel_type": "mid-range",
+      "client_industry": "other",
+      "duration": 5,
+      "pax": 5
+    }
+  },
+  "pending_formal_request": null,
+  "formal_request_detected": false
+}

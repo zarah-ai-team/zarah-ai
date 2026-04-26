@@ -1,0 +1,60 @@
+{
+  "session_id": "f0afda25-cd18-4a2f-ae66-b8e5ea4fde41",
+  "username": "admin",
+  "chat_name": "It's a client's 50th wedding anniversary in Decemb…",
+  "name_auto": true,
+  "created_at": "2026-04-26T12:23:39.831293Z",
+  "updated_at": "2026-04-26T12:24:04.239783Z",
+  "metadata": {
+    "status": "draft",
+    "duration": "3"
+  },
+  "fields": {
+    "total_nights": 2,
+    "nights": 2,
+    "duration": 3,
+    "event_type": "leisure",
+    "client_type": "leisure",
+    "raw_text": "It's a client's 50th wedding anniversary in December 2025. Make an itinerary with cost excluding hotels for 3 days 2 nights in UAE. The itinerary must include a Lexus taxi for 12hrs, must-visit sightseeing, and activities and also include a day in Ferrari World. Budget is 50 thousand INR per person including hotel price, breakfast included, no meal preference"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "It's a client's 50th wedding anniversary in December 2025. Make an itinerary with cost excluding hotels for 3 days 2 nights in UAE. The itinerary must include a Lexus taxi for 12hrs, must-visit sightseeing, and activities and also include a day in Ferrari World. Budget is 50 thousand INR per person including hotel price, breakfast included, no meal preference"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Nights: 2\n\nTo build the itinerary, could you please confirm the **destination(s) / cities to visit** and **number of pax (travelers)**?"
+    },
+    {
+      "role": "user",
+      "content": "UAE and 5"
+    },
+    {
+      "role": "assistant",
+      "content": "I received your travel request.\n\nDetails I have so far:\n  - Nights: 2\n\nTo build the itinerary, could you please confirm the **destination(s) / cities to visit** and **number of pax (travelers)**?"
+    }
+  ],
+  "sanity_checks": [
+    "[2026-04-26T12:23:39.819274Z] Detected formal request format; extracting all fields and generating itinerary",
+    "[2026-04-26T12:23:39.829275Z] Formal parsed: destinations=None nights=2 pax=None",
+    "[2026-04-26T12:23:39.830294Z] Formal request missing fields: ['destination(s) / cities to visit', 'number of pax (travelers)']",
+    "[2026-04-26T12:24:04.142229Z] Handling follow-up reply to pending formal request; extracting missing fields",
+    "[2026-04-26T12:24:04.144229Z] Follow-up merged; pax=None dest=None nights=2",
+    "[2026-04-26T12:24:04.144229Z] Still missing after follow-up: ['destination(s) / cities to visit', 'number of pax (travelers)']"
+  ],
+  "last_llm_raw": null,
+  "last_llm_prompt": null,
+  "pending_confirmation": null,
+  "pending_formal_request": {
+    "partial_fields": {
+      "total_nights": 2,
+      "nights": 2,
+      "duration": 3,
+      "event_type": "leisure",
+      "client_type": "leisure",
+      "raw_text": "It's a client's 50th wedding anniversary in December 2025. Make an itinerary with cost excluding hotels for 3 days 2 nights in UAE. The itinerary must include a Lexus taxi for 12hrs, must-visit sightseeing, and activities and also include a day in Ferrari World. Budget is 50 thousand INR per person including hotel price, breakfast included, no meal preference"
+    }
+  },
+  "formal_request_detected": false
+}

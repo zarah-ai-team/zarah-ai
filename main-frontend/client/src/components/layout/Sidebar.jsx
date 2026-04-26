@@ -14,12 +14,15 @@ import {
   ChevronUp,
   LogOut,
   User,
+  Sun,
+  Moon,
 } from "lucide-react";
 import logo from "../../images/dashboard/logo.svg";
 import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const navItems = [
-  { label: "New Chat", icon: MessageSquarePlus, path: "/chat" },
+  { label: "New Chat", icon: MessageSquarePlus, path: "/chat?new=1" },
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
   { label: "Itinerary Management", icon: Map, path: "/itineraries" },
   { label: "Document Management", icon: FileText, path: "/documents" },
@@ -28,13 +31,13 @@ const navItems = [
 
 const bottomItems = [
   { label: "Settings", icon: Settings, path: "/settings" },
-  { label: "Help and support", icon: HelpCircle, path: "/help" },
 ];
 
 const Sidebar = ({ showProfile = false, collapsed: collapsedProp, onToggleCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const collapsed = collapsedProp !== undefined ? collapsedProp : internalCollapsed;
   const toggleCollapsed = onToggleCollapsed || (() => setInternalCollapsed((c) => !c));
@@ -98,7 +101,7 @@ const Sidebar = ({ showProfile = false, collapsed: collapsedProp, onToggleCollap
         relative bg-sidebar h-full flex flex-col
         rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.08)]
         transition-[width] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
-        ${collapsed ? "w-[72px]" : "w-[220px]"}
+        ${collapsed ? "w-[80px]" : "w-[256px]"}
       `}
     >
       {/* Brand row + collapse toggle (inside sidebar) */}
@@ -136,6 +139,25 @@ const Sidebar = ({ showProfile = false, collapsed: collapsedProp, onToggleCollap
         {bottomItems.map((item) => (
           <NavItem key={item.path} item={item} />
         ))}
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={collapsed ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}
+          aria-label="Toggle theme"
+          className={`
+            relative flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"}
+            mx-2 py-2.5 rounded-lg text-xs font-medium
+            transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer group w-[calc(100%-1rem)]
+            text-white/90 hover:text-brand-300 hover:bg-white/5
+          `}
+        >
+          {theme === "dark"
+            ? <Sun  size={18} className="shrink-0 transition-transform duration-300 group-hover:rotate-45" />
+            : <Moon size={18} className="shrink-0 transition-transform duration-300 group-hover:-rotate-12" />}
+          {!collapsed && (
+            <span className="truncate">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          )}
+        </button>
       </div>
 
       {/* Notification + profile (only when topbar is hidden, e.g. on chat) */}
@@ -189,7 +211,14 @@ const Sidebar = ({ showProfile = false, collapsed: collapsedProp, onToggleCollap
             </button>
 
             {profileOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-1.5 bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.18)] py-1.5 z-30">
+              <div
+                className={`
+                  absolute z-30 bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.18)] py-1.5
+                  ${collapsed
+                    ? "bottom-0 left-full ml-3 w-56"
+                    : "bottom-full left-0 right-0 mb-1.5"}
+                `}
+              >
                 <div className="px-3 py-2 border-b border-gray-100">
                   <p className="text-xs font-semibold text-[#1f1f1f] truncate">{displayName}</p>
                   <p className="text-[10px] text-gray-400 truncate">{displayEmail}</p>

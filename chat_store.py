@@ -127,10 +127,9 @@ def update_chat_metadata_from_fields(username: str, session_id: str, fields: Dic
         meta["duration"] = str(fields.get("duration") or fields.get("nights") or "")
     if fields.get("budget"):
         meta["estimated_cost"] = str(fields.get("budget"))
-    # Status: if we have destination + duration, mark in_progress
-    if fields.get("destination") and (fields.get("duration") or fields.get("nights")):
-        if meta.get("status") == "draft":
-            meta["status"] = "in_progress"
+    # NOTE: do NOT auto-flip status here. The user controls status from the
+    # ItineraryManagement dropdown; auto-flipping draft→in_progress on every
+    # field update was clobbering their choice (e.g. "Saved" → "In Progress").
 
     chat["metadata"] = meta
     chat["updated_at"] = datetime.utcnow().isoformat() + "Z"

@@ -141,10 +141,10 @@ export function generateItineraryPDF(itinerary) {
     </div>
   </div>
 
-  ${itinerary.overview ? `
+  ${(itinerary.itinerary_summary || itinerary.overview) ? `
   <section style="background:#fafafa;border-left:3px solid #FFDE39;padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:14px;">
-    <h2 style="margin-bottom:6px;">Trip Overview</h2>
-    <p style="color:#444;line-height:1.6;">${itinerary.overview}</p>
+    <h2 style="margin-bottom:6px;">Itinerary Summary</h2>
+    <p style="color:#444;line-height:1.6;">${itinerary.itinerary_summary || itinerary.overview}</p>
   </section>` : ""}
 
   <section>
@@ -208,14 +208,29 @@ function DayCard({ day, isOpen, onToggle }) {
         <div className="px-4 py-3.5 bg-white space-y-3 border-t border-gray-100">
           {[["Morning", day.morning], ["Afternoon", day.afternoon], ["Evening", day.evening]]
             .filter(([, v]) => v)
-            .map(([label, content]) => (
-              <div key={label}>
-                <span className="text-[10px] font-bold text-[#8A6800] uppercase tracking-wider">
-                  {label}
-                </span>
-                <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">{content}</p>
-              </div>
-            ))}
+            .map(([label, content]) => {
+              // Split the time-block prose into separate lines whenever a new
+              // HH:MM marker appears so each timed activity sits on its own row.
+              // Handles "07:30 –", "9:00 -", "07:30:" forms. Trim/dedupe blanks.
+              const parts = String(content)
+                .split(/(?=\b\d{1,2}:\d{2}\b)/g)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              return (
+                <div key={label}>
+                  <span className="text-[10px] font-bold text-[#8A6800] uppercase tracking-wider">
+                    {label}
+                  </span>
+                  <ul className="mt-1 space-y-1">
+                    {parts.map((line, i) => (
+                      <li key={i} className="text-sm text-gray-700 leading-relaxed">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
 
           {day.transport_note && (
             <div className="flex items-start gap-2 bg-blue-50 rounded-lg px-3 py-2">
@@ -303,11 +318,11 @@ export default function ItineraryDisplay({ itinerary, sessionId, onSave, onDisca
         </div>
       </div>
 
-      {/* ── Overview / Summary ── */}
-      {itinerary.overview && (
+      {/* ── Itinerary Summary ── */}
+      {(itinerary.itinerary_summary || itinerary.overview) && (
         <div className="bg-gray-50 rounded-xl px-5 py-4 border border-gray-100">
-          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Trip Overview</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{itinerary.overview}</p>
+          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Itinerary Summary</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{itinerary.itinerary_summary || itinerary.overview}</p>
         </div>
       )}
 
