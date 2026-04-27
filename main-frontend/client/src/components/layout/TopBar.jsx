@@ -33,7 +33,7 @@ const TopBar = ({ pageTitle = "Dashboard" }) => {
   };
 
   return (
-    <header className="h-[60px] bg-white dark:bg-[#3a3d44] rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between px-5 font-poppins shrink-0">
+    <header className="h-[60px] bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100 dark:border-white/10 flex items-center justify-between px-5 font-poppins shrink-0">
       {/* Left — Welcome + page title (minimal, lighter weights) */}
       <div className="min-w-0">
         <p className="text-[11px] text-gray-500 dark:text-gray-400 font-light leading-tight">
@@ -50,7 +50,7 @@ const TopBar = ({ pageTitle = "Dashboard" }) => {
       <div className="flex items-center gap-3">
         {/* Notification bell — subtle white circle */}
         <button
-          className="relative w-9 h-9 rounded-full bg-white dark:bg-[#262626] border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center justify-center hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] transition-shadow duration-200"
+          className="relative w-9 h-9 rounded-full bg-white dark:bg-[#1F1F1F] border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center justify-center hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] transition-shadow duration-200"
           aria-label="Notifications"
         >
           <Bell size={14} className="text-[#1f1f1f] dark:text-gray-200" />
@@ -77,7 +77,7 @@ const TopBar = ({ pageTitle = "Dashboard" }) => {
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-[44px] z-20 bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.08)] py-1.5 min-w-[200px]">
+            <div className="absolute right-0 top-[44px] z-20 bg-white dark:bg-[#2A2929] border border-gray-100 dark:border-white/10 rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.08)] py-1.5 min-w-[200px]">
               <div className="px-4 py-3 border-b border-gray-100 dark:border-white/10">
                 <p className="text-[13px] font-medium text-[#1f1f1f] dark:text-white truncate">{displayName}</p>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 font-light truncate">{displayEmail}</p>

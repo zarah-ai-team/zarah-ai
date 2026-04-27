@@ -70,7 +70,7 @@ export default function PortalMenu({
   return createPortal(
     <div
       data-portal-menu
-      className={`fixed z-[1000] bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-xl shadow-[0_8px_28px_rgba(0,0,0,0.16)] py-1 ${className}`}
+      className={`fixed z-[1000] bg-white dark:bg-[#2A2929] border border-gray-100 dark:border-white/10 rounded-xl shadow-[0_8px_28px_rgba(0,0,0,0.16)] py-1 ${className}`}
       style={{ top: pos.top, left: pos.left, width }}
       onClick={(e) => e.stopPropagation()}
     >

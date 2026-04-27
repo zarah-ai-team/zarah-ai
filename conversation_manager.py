@@ -188,19 +188,22 @@ def _is_known_destination(name: str) -> bool:
     # treated as destinations.
     return False
 
-# Only these 4 fields are truly required — everything else is inferred or optional
+# Required fields — must be present before generation. The trip start date is
+# required so each day in the itinerary can be stamped with a real DD/MM/YYYY.
 REQUIRED_FIELDS = [
     "destination",
     "duration",
     "pax",
     "event_type",
+    "trip_start_date",
 ]
 
 PROMPTS = {
-    "destination": "Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country.",
-    "duration":    "How long is the trip? For example: 5 nights, 7 days, or 4N/5D.",
-    "pax":         "How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults.",
-    "event_type":  "What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation.",
+    "destination":     "Where are we heading? A country (e.g. 'Japan'), a city (e.g. 'Tokyo'), or a multi-city route ('Dubai → Abu Dhabi') all work — I'll plan a smart multi-city itinerary if you only give a country.",
+    "duration":        "How long is the trip? For example: 5 nights, 7 days, or 4N/5D.",
+    "pax":             "How many travelers will be joining? Just the number is fine — for example: 20 pax, or 2 adults.",
+    "event_type":      "What kind of trip is this? For example: leisure holiday, corporate offsite, incentive trip, MICE conference, honeymoon, or family vacation.",
+    "trip_start_date": "When does the trip start? You can give me an exact date (e.g. 02/04/2026 or 2 April 2026) so I can stamp every day with the right DD/MM/YYYY.",
 }
 
 # Maps common phrases → normalised event_type + auto-fills client_type
@@ -644,14 +647,45 @@ class ConversationManager:
         if "client_industry" not in fields or not fields["client_industry"]:
             fields["client_industry"] = "other"
 
+        # Mirror checkin_date → trip_start_date so the required-field check sees it.
+        # Also resolve common phrase dates ("next month", "next month start/mid/end")
+        # into a real ISO date so per-day stamping works downstream.
+        from datetime import datetime as _dt2, timedelta as _td
+        _ckin = (fields.get("checkin_date") or "").strip()
+        if _ckin and not fields.get("trip_start_date"):
+            _phrase = _ckin.lower()
+            _resolved = None
+            try:
+                _today = _dt2.now()
+                if _phrase == "next month start" or _phrase.startswith("next month start"):
+                    _y, _m = (_today.year + (_today.month // 12)), ((_today.month % 12) + 1)
+                    _resolved = _dt2(_y, _m, 1).strftime("%Y-%m-%d")
+                elif _phrase == "next month mid":
+                    _y, _m = (_today.year + (_today.month // 12)), ((_today.month % 12) + 1)
+                    _resolved = _dt2(_y, _m, 15).strftime("%Y-%m-%d")
+                elif _phrase == "next month end":
+                    _y, _m = (_today.year + (_today.month // 12)), ((_today.month % 12) + 1)
+                    _resolved = _dt2(_y, _m, 28).strftime("%Y-%m-%d")
+                elif _phrase == "next month":
+                    _y, _m = (_today.year + (_today.month // 12)), ((_today.month % 12) + 1)
+                    _resolved = _dt2(_y, _m, 1).strftime("%Y-%m-%d")
+                else:
+                    # Already ISO?
+                    _resolved = _dt2.strptime(_ckin, "%Y-%m-%d").strftime("%Y-%m-%d")
+            except Exception:
+                _resolved = None
+            if _resolved:
+                fields["trip_start_date"] = _resolved
+                # Also normalise checkin_date to ISO so later date math works
+                fields["checkin_date"] = _resolved
+
         # Auto-derive checkout_date from checkin + duration when possible
         if fields.get("checkin_date") and (not fields.get("checkout_date")):
             duration = fields.get("duration") or fields.get("nights")
             if duration:
                 try:
-                    from datetime import datetime as _dt2, timedelta
                     checkin_dt = _dt2.strptime(str(fields["checkin_date"]), "%Y-%m-%d")
-                    fields["checkout_date"] = (checkin_dt + timedelta(days=int(duration))).strftime("%Y-%m-%d")
+                    fields["checkout_date"] = (checkin_dt + _td(days=int(duration))).strftime("%Y-%m-%d")
                 except Exception:
                     pass
 
@@ -761,6 +795,33 @@ class ConversationManager:
             missing = self.next_missing_field(fields)
             if not missing:
                 return {"need_more": False}
+
+        elif missing == "trip_start_date":
+            # The user just answered a "when does the trip start?" question.
+            # Re-run our date detection on the answer so we accept ISO, natural-
+            # language ("3 April 2026"), and slash forms ("02/04/2026").
+            from datetime import datetime as _dt3
+            _picked = None
+            try:
+                _picked = self.detect_fields_in_text(message).get("checkin_date")
+            except Exception:
+                _picked = None
+            if not _picked:
+                # Try DD/MM/YYYY and DD-MM-YYYY directly
+                m = re.search(r"\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b", msg_stripped)
+                if m:
+                    try:
+                        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                        if y < 100: y += 2000
+                        _picked = _dt3(y, mo, d).strftime("%Y-%m-%d")
+                    except Exception:
+                        _picked = None
+            if _picked:
+                fields["checkin_date"] = _picked
+                fields["trip_start_date"] = _picked
+                missing = self.next_missing_field(fields)
+                if not missing:
+                    return {"need_more": False}
 
         elif missing == "destination":
             parsed = self.detect_fields_in_text(message)

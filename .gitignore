@@ -1,11 +1,28 @@
 # Local env / logs
+.env
 main-frontend/client/.env.local
 main-frontend/client/.env.development.local
 main-frontend/client/.env.test.local
 main-frontend/client/.env.production.local
 main-frontend/client/frontend.log
+*.log
 **/coverage/
 **/build/
+
+# Python runtime
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Runtime data — chat history, uploads, KB docs (per-user, not source)
+data/chats/
+data/uploads/
+data/user_kb_docs/
+
+# Claude Code worktrees / local settings
+.claude/worktrees/
+.claude/settings.local.json
 
 # Design references (local only)
 chat-figma-ref.png

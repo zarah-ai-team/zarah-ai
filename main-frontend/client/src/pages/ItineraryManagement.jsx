@@ -3,12 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search,
   ChevronDown,
-  ClipboardList,
-  FileCheck,
-  FileEdit,
-  CheckCircle,
   MoreVertical,
-  Plus,
   RefreshCw,
   Trash2,
   Download,
@@ -18,6 +13,13 @@ import {
 import { listChats, createChat, deleteChat, getChatSession, updateChatMetadata } from "../services/chatService";
 import ItineraryDisplay, { generateItineraryPDF } from "../components/chat/ItineraryDisplay";
 import PortalMenu from "../components/common/PortalMenu";
+import {
+  TotalItinerariesIcon,
+  SavedIcon,
+  InProgressIcon,
+  CompletedIcon,
+  ChatPlusIcon,
+} from "../components/itinerary/ItineraryIcons";
 
 /** Per-row action menu using PortalMenu so it isn't clipped by the table's overflow-hidden. */
 function RowActionMenu({ open, onToggle, onClose, items }) {
@@ -52,10 +54,10 @@ function RowActionMenu({ open, onToggle, onClose, items }) {
 }
 
 const iconMap = {
-  "clipboard-list": ClipboardList,
-  "file-check": FileCheck,
-  "file-edit": FileEdit,
-  "check-circle": CheckCircle,
+  "clipboard-list": TotalItinerariesIcon,
+  "file-edit": SavedIcon,
+  "file-check": InProgressIcon,
+  "check-circle": CompletedIcon,
 };
 
 function formatDateRange(iso) {
@@ -267,21 +269,20 @@ const ItineraryManagement = () => {
       {/* Stats cards — wider, tighter row, smaller corner radius, lower height */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {stats.map((stat) => {
-          const Icon = iconMap[stat.icon] || ClipboardList;
+          const Icon = iconMap[stat.icon] || TotalItinerariesIcon;
           return (
             <div
               key={stat.id}
-              className="bg-white rounded-lg border border-gray-100 p-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+              className="bg-white dark:bg-[#2A2929] rounded-lg border border-gray-100 dark:border-white/10 p-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-all duration-300 hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] hover:border-gray-200 dark:hover:border-[#FFDE39]/25 dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
             >
-              <div className="bg-[#FFF6B5] rounded-md px-4 py-2.5 flex items-center justify-between">
+              <div className="bg-[#FFF6B5] dark:bg-gradient-to-br dark:from-[#1F1F1F] dark:to-[#262524] dark:border dark:border-[#FFDE39]/15 rounded-md px-4 py-2.5 flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-[22px] font-bold text-[#1f1f1f] leading-none">{stat.value}</p>
-                  <p className="text-[10.5px] text-[#1f1f1f] mt-1 font-medium">{stat.label}</p>
+                  <p className="text-[22px] font-bold text-[#1f1f1f] dark:text-white leading-none">{stat.value}</p>
+                  <p className="text-[10.5px] text-[#1f1f1f] dark:text-gray-300 mt-1 font-medium">{stat.label}</p>
                 </div>
                 <Icon
-                  size={20}
-                  strokeWidth={1}
-                  className="text-[#1f1f1f] fill-[#FFDE39] shrink-0"
+                  size={28}
+                  className="shrink-0 text-[#FFDE39] dark:[filter:drop-shadow(0_0_6px_rgba(255,222,57,0.35))]"
                 />
               </div>
             </div>
@@ -290,29 +291,29 @@ const ItineraryManagement = () => {
       </div>
 
       {/* Single white card containing controls + table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+      <div className="bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100 dark:border-white/10 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
         {/* Controls row — title + search + filters + CTA */}
         <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-          <h2 className="text-[15px] font-semibold text-gray-800 mr-1">Itinerary list</h2>
+          <h2 className="text-[15px] font-semibold text-gray-800 dark:text-white mr-1">Itinerary list</h2>
 
-          <div className="flex items-center bg-white border border-gray-200 rounded-full px-3.5 py-1.5 w-64 focus-within:border-gray-300 transition-all duration-300">
-            <Search size={14} className="text-gray-400 mr-2" />
+          <div className="flex items-center bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-full px-3.5 py-1.5 w-64 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all duration-300">
+            <Search size={14} className="text-gray-400 dark:text-gray-500 mr-2" />
             <input
               type="text"
               placeholder="Search history"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent outline-none text-[12.5px] text-gray-700 placeholder-gray-400 w-full font-poppins"
+              className="bg-transparent outline-none text-[12.5px] text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 w-full font-poppins"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[12.5px] text-gray-500">Status</span>
+            <span className="text-[12.5px] text-gray-500 dark:text-gray-400">Status</span>
             <div className="relative">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none bg-white border border-gray-200 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 outline-none focus:border-gray-300 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
+                className="appearance-none bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 dark:text-gray-200 outline-none focus:border-gray-300 dark:focus:border-white/20 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
               >
                 <option>All</option>
                 <option>Saved</option>
@@ -320,26 +321,26 @@ const ItineraryManagement = () => {
                 <option>In Progress</option>
                 <option>Completed</option>
               </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[12.5px] text-gray-500">Clients</span>
+            <span className="text-[12.5px] text-gray-500 dark:text-gray-400">Clients</span>
             <div className="relative">
               <select
                 defaultValue="All"
-                className="appearance-none bg-white border border-gray-200 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 outline-none focus:border-gray-300 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
+                className="appearance-none bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 dark:text-gray-200 outline-none focus:border-gray-300 dark:focus:border-white/20 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
               >
                 <option>All</option>
               </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
             </div>
           </div>
 
           <button
             onClick={(e) => { e.stopPropagation(); fetchSessions(); }}
-            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-all duration-200"
+            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-white/5 rounded-md transition-all duration-200"
             title="Refresh"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -350,10 +351,24 @@ const ItineraryManagement = () => {
           <button
             onClick={handleCreateNew}
             disabled={creating}
-            className="flex items-center gap-2 bg-[#1f1f1f] text-white text-[12.5px] font-medium px-4 py-2 rounded-md hover:bg-[#2A2929] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="group relative overflow-hidden flex items-center gap-2 bg-[#1f1f1f] text-[#FFDE39] text-[12.5px] font-medium px-3.5 py-1.5 rounded-[8px] border border-transparent whitespace-nowrap shrink-0
+                       transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+                       hover:border-[#FFDE39]/40
+                       hover:shadow-[0_0_0_1px_rgba(255,222,57,0.35),0_6px_18px_-8px_rgba(255,222,57,0.55)]
+                       hover:bg-[#262524]
+                       active:scale-[0.98]
+                       disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Plus size={14} className="text-[#FFDE39]" />
-            {creating ? "Creating…" : "Create New Itinerary"}
+            {/* Shimmer sweep on hover */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-[#FFDE39]/15 to-transparent translate-x-0 group-hover:translate-x-[300%] transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+            />
+            <ChatPlusIcon
+              size={16}
+              className="relative shrink-0 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-[-8deg] group-hover:scale-110 group-hover:[filter:drop-shadow(0_0_5px_rgba(255,222,57,0.55))]"
+            />
+            <span className="relative">{creating ? "Creating…" : "Create New Itinerary"}</span>
           </button>
         </div>
 
@@ -375,13 +390,13 @@ const ItineraryManagement = () => {
             <tbody>
               {loading && sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-[12.5px]">
+                  <td colSpan={8} className="px-5 py-10 text-center text-gray-400 dark:text-gray-500 text-[12.5px]">
                     Loading itineraries…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-[12.5px]">
+                  <td colSpan={8} className="px-5 py-10 text-center text-gray-400 dark:text-gray-500 text-[12.5px]">
                     No itineraries found.
                   </td>
                 </tr>
@@ -389,24 +404,24 @@ const ItineraryManagement = () => {
                 filtered.map((item, i) => (
                   <tr
                     key={item.id}
-                    className={`${i % 2 === 0 ? "bg-white" : "bg-[#f5f5f5]"} hover:bg-[#FFFCE6] transition-all duration-300 cursor-pointer`}
+                    className={`${i % 2 === 0 ? "bg-white dark:bg-[#2A2929]" : "bg-[#f5f5f5] dark:bg-white/[0.02]"} hover:bg-[#FFFCE6] dark:hover:bg-[#FFDE39]/[0.06] transition-all duration-300 cursor-pointer`}
                     onClick={() => navigate(`/chat?session=${item.sessionId}`)}
                   >
-                    <td className="px-5 py-3 text-[#1f1f1f] font-medium whitespace-nowrap max-w-[220px]">
+                    <td className="px-5 py-3 text-[#1f1f1f] dark:text-gray-100 font-medium whitespace-nowrap max-w-[220px]">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="truncate underline underline-offset-2 decoration-[#1f1f1f]/60">{item.name}</span>
+                        <span className="truncate underline underline-offset-2 decoration-[#1f1f1f]/60 dark:decoration-white/40">{item.name}</span>
                         {item.hasItinerary && (
-                          <span className="text-[9.5px] font-medium text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          <span className="text-[9.5px] font-medium text-green-700 bg-green-50 border border-green-200 dark:text-green-300 dark:bg-green-500/10 dark:border-green-500/20 px-1.5 py-0.5 rounded-full flex-shrink-0">
                             Saved
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.group}</td>
-                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.travelDates}</td>
-                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.travelers}</td>
-                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.duration}</td>
-                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{item.estimatedCost}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{item.group}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{item.travelDates}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{item.travelers}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{item.duration}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{item.estimatedCost}</td>
                     <td className="px-5 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const opt = STATUS_OPTIONS.find((o) => o.value === item.statusKey)

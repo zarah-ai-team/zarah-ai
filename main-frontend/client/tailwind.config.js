@@ -41,11 +41,22 @@ module.exports = {
           "0%":   { opacity: "0", transform: "scale(0.97) translateY(8px)" },
           "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
         },
+        shimmer: {
+          "0%":   { backgroundPosition: "0% 50%" },
+          "100%": { backgroundPosition: "200% 50%" },
+        },
+        pulseRing: {
+          "0%":   { transform: "scale(0.85)", opacity: "0.7" },
+          "70%":  { transform: "scale(1.4)",  opacity: "0" },
+          "100%": { transform: "scale(1.4)",  opacity: "0" },
+        },
       },
       animation: {
         fadeIn:    "fadeIn 0.45s cubic-bezier(0.16,1,0.3,1) both",
         slideUp:   "slideUp 0.5s cubic-bezier(0.16,1,0.3,1) both",
         fadeScale: "fadeScale 0.4s cubic-bezier(0.16,1,0.3,1) both",
+        shimmer:   "shimmer 2.4s linear infinite",
+        pulseRing: "pulseRing 1.6s cubic-bezier(0.16,1,0.3,1) infinite",
       },
       transitionTimingFunction: {
         spring: "cubic-bezier(0.16, 1, 0.3, 1)",

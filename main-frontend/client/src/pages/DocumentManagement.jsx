@@ -63,10 +63,10 @@ function DocActionMenu({ open, onToggle, onClose, onReprocess, onDelete }) {
 const ITEMS_PER_PAGE = 10;
 
 const KB_BADGE = {
-  indexed:   { label: "Indexed",    cls: "bg-green-100 text-green-700",  Icon: CheckCircle },
-  queued:    { label: "Processing", cls: "bg-yellow-100 text-yellow-700", Icon: Clock },
-  error:     { label: "Error",      cls: "bg-red-100 text-red-700",      Icon: AlertCircle },
-  skipped:   { label: "Skipped",    cls: "bg-gray-100 text-gray-500",    Icon: null },
+  indexed:   { label: "Indexed",    cls: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",       Icon: CheckCircle },
+  queued:    { label: "Processing", cls: "bg-yellow-100 text-yellow-700 dark:bg-[#FFDE39]/15 dark:text-[#FFDE39]",      Icon: Clock },
+  error:     { label: "Error",      cls: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",                Icon: AlertCircle },
+  skipped:   { label: "Skipped",    cls: "bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-400",           Icon: null },
 };
 
 function KbBadge({ status }) {
@@ -130,13 +130,12 @@ function extColorClass(ext) {
 }
 
 // ── Animated sliding-pill tab toggle ─────────────────────────────────────────
-function DocTabToggle({ activeTab, onSelect, tabRefs, indicator, setIndicator, isAdmin, indexedCount }) {
+function DocTabToggle({ activeTab, onSelect, tabRefs, indicator, setIndicator, isAdmin }) {
   const tabs = useMemo(() => {
     const base = [
       { key: "list",    label: "Document List" },
       { key: "upload",  label: "Upload Documents" },
       { key: "history", label: "History",          icon: History },
-      { key: "indexed", label: "Indexed",          icon: Database },
     ];
     if (isAdmin) base.push({ key: "library", label: "Knowledge Library", icon: Library });
     return base;
@@ -151,10 +150,10 @@ function DocTabToggle({ activeTab, onSelect, tabRefs, indicator, setIndicator, i
   }, [activeTab, tabs, tabRefs, setIndicator]);
 
   return (
-    <div className="relative inline-flex bg-white rounded-full p-1 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      {/* Sliding black indicator */}
+    <div className="relative inline-flex bg-white dark:bg-[#2A2929] rounded-full p-1 border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.4)]">
+      {/* Sliding indicator — dark in both themes; in dark mode a faint yellow ring helps it stand out from the pill bg */}
       <div
-        className="absolute top-1 bottom-1 rounded-full bg-[#1f1f1f] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="absolute top-1 bottom-1 rounded-full bg-[#1f1f1f] dark:ring-1 dark:ring-[#FFDE39]/25 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
           left: indicator.left,
           width: indicator.width,
@@ -171,18 +170,13 @@ function DocTabToggle({ activeTab, onSelect, tabRefs, indicator, setIndicator, i
             ref={(el) => { tabRefs.current[t.key] = el; }}
             onClick={() => onSelect(t.key)}
             className={`relative z-10 flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-medium rounded-full transition-colors duration-300 cursor-pointer ${
-              active ? "text-[#FFDE39]" : "text-[#1f1f1f] hover:text-gray-700"
+              active
+                ? "text-[#FFDE39]"
+                : "text-[#1f1f1f] dark:text-gray-300 hover:text-gray-700 dark:hover:text-white"
             }`}
           >
             {TabIcon && <TabIcon size={12} />}
             <span>{t.label}</span>
-            {t.key === "indexed" && indexedCount > 0 && (
-              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold leading-none transition-colors duration-300 ${
-                active ? "bg-[#FFDE39]/25 text-[#FFDE39]" : "bg-green-100 text-green-700"
-              }`}>
-                {indexedCount}
-              </span>
-            )}
           </button>
         );
       })}
@@ -475,7 +469,7 @@ const DocumentManagement = () => {
           className={`w-7 h-7 rounded-lg text-xs font-medium transition-all duration-300 ${
             i === currentPage
               ? "bg-[#FFDE39] text-dark-300"
-              : "text-gray-400 hover:bg-gray-100"
+              : "text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 dark:hover:text-gray-200"
           }`}
         >
           {i}
@@ -489,6 +483,11 @@ const DocumentManagement = () => {
     ? `${storageUsed.used_mb?.toFixed(1) ?? "?"} MB / ${storageUsed.total_mb?.toFixed(0) ?? "?"} MB`
     : "Storage Usage";
 
+  const storagePct =
+    storageUsed?.total_mb && storageUsed.total_mb > 0
+      ? Math.min(100, Math.round((storageUsed.used_mb / storageUsed.total_mb) * 100))
+      : null;
+
   return (
     <div className="animate-fadeIn">
       {/* Tab toggle (sliding pill) + storage */}
@@ -500,13 +499,23 @@ const DocumentManagement = () => {
           indicator={indicator}
           setIndicator={setIndicator}
           isAdmin={isAdmin}
-          indexedCount={indexedDocs.length}
         />
 
-        <div className="flex items-center gap-2 bg-white border border-gray-100 rounded-md px-3 py-1.5 text-[12px]">
-          <HardDrive size={13} className="text-gray-500" />
-          <span className="text-gray-500">Storage Usage</span>
-          <span className="font-semibold text-[#1f1f1f]">{storageLabel}</span>
+        <div className="flex items-center gap-2 bg-white dark:bg-[#2A2929] border border-gray-100 dark:border-white/10 rounded-md px-3 py-1.5 text-[12px] shadow-[0_1px_3px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+          <HardDrive size={13} className="text-gray-500 dark:text-gray-400" />
+          <span className="text-gray-500 dark:text-gray-400">Storage</span>
+          <span className="font-semibold text-[#1f1f1f] dark:text-white">{storageLabel}</span>
+          {storagePct !== null && (
+            <div
+              className="w-14 h-1.5 ml-1 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden"
+              title={`${storagePct}% used`}
+            >
+              <div
+                className="h-full rounded-full bg-[#FFDE39] transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                style={{ width: `${storagePct}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -516,29 +525,29 @@ const DocumentManagement = () => {
       {activeTab === "list" && (
         <div className="animate-fadeIn">
           {/* Single white card containing controls + table */}
-          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+          <div className="bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100 dark:border-white/10 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
             {/* Filters / controls row */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <h2 className="text-[15px] font-semibold text-gray-800 mr-1">Documents list</h2>
+              <h2 className="text-[15px] font-semibold text-gray-800 dark:text-white mr-1">Documents list</h2>
 
-              <div className="flex items-center bg-white border border-gray-200 rounded-full px-3.5 py-1.5 w-64 focus-within:border-gray-300 transition-all duration-300">
-                <Search size={14} className="text-gray-400 mr-2" />
+              <div className="flex items-center bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-full px-3.5 py-1.5 w-64 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all duration-300">
+                <Search size={14} className="text-gray-400 dark:text-gray-500 mr-2" />
                 <input
                   type="text"
-                  placeholder="Search history"
+                  placeholder="Search documents"
                   value={searchQuery}
                   onChange={(e) => handleSearchChange(e.target.value)}
-                  className="bg-transparent outline-none text-[12.5px] text-gray-700 placeholder-gray-400 w-full font-poppins"
+                  className="bg-transparent outline-none text-[12.5px] text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 w-full font-poppins"
                 />
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[12.5px] text-gray-500">Status</span>
+                <span className="text-[12.5px] text-gray-500 dark:text-gray-400">Status</span>
                 <div className="relative">
                   <select
                     value={statusFilter}
                     onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none bg-white border border-gray-200 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 outline-none focus:border-gray-300 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
+                    className="appearance-none bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 dark:text-gray-200 outline-none focus:border-gray-300 dark:focus:border-white/20 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
                   >
                     <option>All</option>
                     <option>PDF</option>
@@ -547,29 +556,29 @@ const DocumentManagement = () => {
                     <option>JPG</option>
                     <option>PNG</option>
                   </select>
-                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[12.5px] text-gray-500">Order</span>
+                <span className="text-[12.5px] text-gray-500 dark:text-gray-400">Order</span>
                 <div className="relative">
                   <select
                     value={orderFilter}
                     onChange={(e) => { setOrderFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none bg-white border border-gray-200 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 outline-none focus:border-gray-300 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
+                    className="appearance-none bg-white dark:bg-[#1F1F1F] border border-gray-200 dark:border-white/10 rounded-md pl-3 pr-7 py-1.5 text-[12.5px] text-gray-700 dark:text-gray-200 outline-none focus:border-gray-300 dark:focus:border-white/20 transition-all duration-300 cursor-pointer font-poppins min-w-[88px]"
                   >
                     <option>All</option>
                     <option>Newest</option>
                     <option>Oldest</option>
                   </select>
-                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
                 </div>
               </div>
 
               <button
                 onClick={fetchDocs}
-                className="ml-auto p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-all duration-200"
+                className="ml-auto p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-white/5 rounded-md transition-all duration-200"
                 title="Refresh"
               >
                 <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -577,7 +586,7 @@ const DocumentManagement = () => {
             </div>
 
             {listError && (
-              <div className="mx-4 mb-3 px-4 py-2.5 bg-red-50 border border-red-100 rounded-lg text-[12px] text-red-600">
+              <div className="mx-4 mb-3 px-4 py-2.5 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-lg text-[12px] text-red-600 dark:text-red-300">
                 {listError}
               </div>
             )}
@@ -598,13 +607,13 @@ const DocumentManagement = () => {
                 <tbody>
                   {loading && documents.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-gray-400 text-[12.5px]">
+                      <td colSpan={6} className="px-5 py-10 text-center text-gray-400 dark:text-gray-500 text-[12.5px]">
                         Loading documents…
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-gray-400 text-[12.5px]">
+                      <td colSpan={6} className="px-5 py-10 text-center text-gray-400 dark:text-gray-500 text-[12.5px]">
                         No documents found.
                       </td>
                     </tr>
@@ -616,14 +625,14 @@ const DocumentManagement = () => {
                       return (
                         <tr
                           key={docId}
-                          className={`${i % 2 === 0 ? "bg-white" : "bg-[#f5f5f5]"} hover:bg-[#FFFCE6] transition-all duration-300`}
+                          className={`${i % 2 === 0 ? "bg-white dark:bg-[#2A2929]" : "bg-[#f5f5f5] dark:bg-white/[0.02]"} hover:bg-[#FFFCE6] dark:hover:bg-[#FFDE39]/[0.06] transition-all duration-300`}
                         >
-                          <td className="px-5 py-3 text-[#1f1f1f] font-medium whitespace-nowrap max-w-[280px]">
-                            <span className="block truncate underline underline-offset-2 decoration-[#1f1f1f]/60">{name}</span>
+                          <td className="px-5 py-3 text-[#1f1f1f] dark:text-gray-100 font-medium whitespace-nowrap max-w-[280px]">
+                            <span className="block truncate underline underline-offset-2 decoration-[#1f1f1f]/60 dark:decoration-white/40">{name}</span>
                           </td>
-                          <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{ext}</td>
-                          <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatSize(doc.size_bytes ?? doc.file_size ?? doc.size)}</td>
-                          <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDate(doc.uploaded_at)}</td>
+                          <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{ext}</td>
+                          <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatSize(doc.size_bytes ?? doc.file_size ?? doc.size)}</td>
+                          <td className="px-5 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatDate(doc.uploaded_at)}</td>
                           <td className="px-5 py-3 whitespace-nowrap">
                             <KbBadge status={doc.kb_status} />
                           </td>
@@ -651,7 +660,7 @@ const DocumentManagement = () => {
               <button
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
               >
                 <ChevronLeft size={14} />
               </button>
@@ -659,7 +668,7 @@ const DocumentManagement = () => {
               <button
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
               >
                 <ChevronRight size={14} />
               </button>
@@ -678,17 +687,19 @@ const DocumentManagement = () => {
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleFileDrop}
-            className={`bg-white rounded-xl py-12 px-6 text-center transition-all duration-300 border-2 border-dashed ${
-              dragOver ? "border-[#FFDE39] bg-[#FFFCE6]/40" : "border-gray-200"
+            className={`bg-white dark:bg-[#2A2929] rounded-xl py-12 px-6 text-center transition-all duration-300 border-2 border-dashed ${
+              dragOver
+                ? "border-[#FFDE39] bg-[#FFFCE6]/40 dark:bg-[#FFDE39]/[0.06]"
+                : "border-gray-200 dark:border-white/10"
             }`}
           >
-            <div className="mx-auto mb-4 w-14 h-12 flex items-center justify-center">
+            <div className={`mx-auto mb-4 w-14 h-12 flex items-center justify-center transition-transform duration-500 ${dragOver ? "scale-110" : "hover:scale-105"}`}>
               <svg width="56" height="48" viewBox="0 0 56 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M4 8C4 5.79 5.79 4 8 4H20L26 10H48C50.21 10 52 11.79 52 14V40C52 42.21 50.21 44 48 44H8C5.79 44 4 42.21 4 40V8Z" fill="#FFDE39" stroke="#E6C800" strokeWidth="1.5"/>
                 <path d="M28 20V32M22 26L28 20L34 26" stroke="#1f1f1f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <p className="text-[13px] text-gray-600">
+            <p className="text-[13px] text-gray-600 dark:text-gray-300">
               Drag &amp; Drop or{" "}
               <label className="font-medium text-[#1f1f1f] bg-[#FFDE39] hover:bg-[#FFEC85] cursor-pointer transition-colors duration-200 px-1.5 py-0.5 rounded">
                 Choose File
@@ -700,7 +711,7 @@ const DocumentManagement = () => {
               {["PDF", "DocX", "Xlsx", "JPG", "PNG", "ZIP"].map((fmt) => (
                 <span
                   key={fmt}
-                  className="text-[10px] text-gray-500 border border-gray-200 px-2 py-0.5 rounded font-medium"
+                  className="text-[10px] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded font-medium"
                 >
                   {fmt}
                 </span>
@@ -710,21 +721,21 @@ const DocumentManagement = () => {
 
           {uploadedFiles.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-[14px] font-semibold text-gray-800 mb-3">Uploaded Files</h3>
+              <h3 className="text-[14px] font-semibold text-gray-800 dark:text-white mb-3">Uploaded Files</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {uploadedFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="flex items-center gap-3 bg-white rounded-lg border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] px-3 py-2.5 transition-all duration-300 hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)]"
+                    className="flex items-center gap-3 bg-white dark:bg-[#2A2929] rounded-lg border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.35)] px-3 py-2.5 transition-all duration-300 hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)] dark:hover:border-[#FFDE39]/25"
                   >
-                    <div className="w-9 h-9 rounded-md bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
-                      <FileText size={15} className="text-[#1f1f1f]" />
+                    <div className="w-9 h-9 rounded-md bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 flex items-center justify-center flex-shrink-0">
+                      <FileText size={15} className="text-[#1f1f1f] dark:text-gray-300" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12.5px] font-semibold text-[#1f1f1f] truncate">{file.name}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">{file.size} · {file.type}</p>
+                      <p className="text-[12.5px] font-semibold text-[#1f1f1f] dark:text-gray-100 truncate">{file.name}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{file.size} · {file.type}</p>
                       {file.status === "uploading" && (
-                        <div className="mt-1.5 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div className="mt-1.5 h-1 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-[#FFDE39] rounded-full transition-all duration-300"
                             style={{ width: `${file.progress}%` }}
@@ -735,12 +746,12 @@ const DocumentManagement = () => {
                         <div className="mt-1"><KbBadge status={file.kbStatus} /></div>
                       )}
                       {file.status === "error" && (
-                        <p className="mt-1 text-[11px] text-red-500 truncate">{file.error}</p>
+                        <p className="mt-1 text-[11px] text-red-500 dark:text-red-300 truncate">{file.error}</p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className="text-[11px] text-gray-400 whitespace-nowrap">{file.timeAgo}</span>
-                      <button onClick={() => removeUploadEntry(file.id)} className="p-0.5 text-gray-300 hover:text-gray-500 transition-colors">
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500 whitespace-nowrap">{file.timeAgo}</span>
+                      <button onClick={() => removeUploadEntry(file.id)} className="p-0.5 text-gray-300 dark:text-gray-500 hover:text-gray-500 dark:hover:text-white transition-colors">
                         <X size={12} />
                       </button>
                     </div>
@@ -759,12 +770,12 @@ const DocumentManagement = () => {
         <div className="animate-fadeIn">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-sm font-semibold text-gray-800">Upload History</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Recently uploaded documents, newest first</p>
+              <h2 className="text-sm font-semibold text-gray-800 dark:text-white">Upload History</h2>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Recently uploaded documents, newest first</p>
             </div>
             <button
               onClick={fetchDocs}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300"
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-all duration-300"
               title="Refresh"
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -777,13 +788,13 @@ const DocumentManagement = () => {
             </div>
           ) : documents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#FFFAC5] border-2 border-[#FFDE39]/40 flex items-center justify-center mb-3">
-                <History size={20} className="text-[#E6C800]" />
+              <div className="w-12 h-12 rounded-full bg-[#FFFAC5] dark:bg-[#FFDE39]/15 border-2 border-[#FFDE39]/40 flex items-center justify-center mb-3">
+                <History size={20} className="text-[#E6C800] dark:text-[#FFDE39]" />
               </div>
-              <p className="text-sm text-gray-500">No documents uploaded yet.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-300">No documents uploaded yet.</p>
               <button
                 onClick={() => setActiveTab("upload")}
-                className="mt-3 text-xs font-medium text-[#8A6800] bg-[#FFFAC5] hover:bg-[#FFDE39] px-3 py-1.5 rounded-full border border-[#FFDE39]/50 transition-all duration-300 cursor-pointer"
+                className="mt-3 text-xs font-medium text-[#8A6800] dark:text-[#1f1f1f] bg-[#FFFAC5] dark:bg-[#FFDE39] hover:bg-[#FFDE39] dark:hover:brightness-95 px-3 py-1.5 rounded-full border border-[#FFDE39]/50 transition-all duration-300 cursor-pointer"
               >
                 Upload a document
               </button>
@@ -801,19 +812,19 @@ const DocumentManagement = () => {
                   return (
                     <div
                       key={docId}
-                      className="flex items-start gap-3 bg-gradient-to-br from-[#FFFCE6]/60 to-white rounded-xl border border-[#FFDE39]/20 shadow-[0_1px_4px_rgba(255,222,57,0.06)] px-4 py-3 transition-all duration-300 hover:shadow-[0_4px_12px_rgba(255,222,57,0.14)] hover:-translate-y-0.5"
+                      className="flex items-start gap-3 bg-gradient-to-br from-[#FFFCE6]/60 to-white dark:from-[#FFDE39]/[0.04] dark:to-[#2A2929] rounded-xl border border-[#FFDE39]/20 dark:border-white/10 shadow-[0_1px_4px_rgba(255,222,57,0.06)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.35)] px-4 py-3 transition-all duration-300 hover:shadow-[0_4px_12px_rgba(255,222,57,0.14)] dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.45)] dark:hover:border-[#FFDE39]/30 hover:-translate-y-0.5"
                     >
-                      <div className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${colors.bg} ${colors.border}`}>
-                        <FileText size={18} className={colors.text} />
+                      <div className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${colors.bg} ${colors.border} dark:bg-white/5 dark:border-white/10`}>
+                        <FileText size={18} className={`${colors.text} dark:!text-[#FFDE39]`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate">{name}</p>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{name}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${colors.bg} ${colors.text}`}>{ext}</span>
-                          <span className="text-xs text-gray-400">{formatSize(doc.size_bytes ?? doc.file_size ?? doc.size)}</span>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${colors.bg} ${colors.text} dark:bg-white/[0.06] dark:!text-gray-300`}>{ext}</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">{formatSize(doc.size_bytes ?? doc.file_size ?? doc.size)}</span>
                         </div>
                         <div className="flex items-center justify-between mt-1.5">
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                             <Clock size={10} />
                             {formatRelativeDate(doc.uploaded_at)}
                           </span>
@@ -943,27 +954,27 @@ const DocumentManagement = () => {
       {activeTab === "library" && isAdmin && (
         <div className="animate-fadeIn">
           <div className="flex flex-wrap items-center gap-3 mb-5">
-            <h2 className="text-sm font-semibold text-gray-800 mr-1">Knowledge Library</h2>
-            <span className="text-xs text-gray-400">— itinerary files pre-loaded as context</span>
+            <h2 className="text-sm font-semibold text-gray-800 dark:text-white mr-1">Knowledge Library</h2>
+            <span className="text-xs text-gray-400 dark:text-gray-500">— itinerary files pre-loaded as context</span>
 
-            <div className="flex items-center bg-white border border-gray-100/80 rounded-lg px-3 py-1.5 w-52 shadow-[0_1px_4px_rgba(0,0,0,0.04)] focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06)] focus-within:border-gray-300 transition-all duration-300">
-              <Search size={14} className="text-gray-400 mr-2" />
+            <div className="flex items-center bg-white dark:bg-[#1F1F1F] border border-gray-100/80 dark:border-white/10 rounded-lg px-3 py-1.5 w-52 shadow-[0_1px_4px_rgba(0,0,0,0.04)] focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06)] focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all duration-300">
+              <Search size={14} className="text-gray-400 dark:text-gray-500 mr-2" />
               <input
                 type="text"
                 placeholder="Search library"
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
-                className="bg-transparent outline-none text-xs text-gray-700 placeholder-gray-400 w-full font-poppins"
+                className="bg-transparent outline-none text-xs text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 w-full font-poppins"
               />
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">Type</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Type</span>
               <div className="relative">
                 <select
                   value={libraryTypeFilter}
                   onChange={(e) => setLibraryTypeFilter(e.target.value)}
-                  className="appearance-none bg-white border border-gray-100/80 rounded-lg px-3 py-1.5 pr-7 text-xs text-gray-700 outline-none shadow-[0_1px_4px_rgba(0,0,0,0.04)] cursor-pointer font-poppins"
+                  className="appearance-none bg-white dark:bg-[#1F1F1F] border border-gray-100/80 dark:border-white/10 rounded-lg px-3 py-1.5 pr-7 text-xs text-gray-700 dark:text-gray-200 outline-none shadow-[0_1px_4px_rgba(0,0,0,0.04)] cursor-pointer font-poppins"
                 >
                   <option>All</option>
                   <option>PDF</option>
@@ -971,13 +982,13 @@ const DocumentManagement = () => {
                   <option>XLSX</option>
                   <option>PPTX</option>
                 </select>
-                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
               </div>
             </div>
 
             <button
               onClick={fetchLibrary}
-              className="ml-auto p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300"
+              className="ml-auto p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-white/5 rounded-lg transition-all duration-300"
               title="Refresh"
             >
               <RefreshCw size={14} className={libraryLoading ? "animate-spin" : ""} />
@@ -985,12 +996,12 @@ const DocumentManagement = () => {
           </div>
 
           {libraryError && (
-            <div className="mb-4 px-4 py-2.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">
+            <div className="mb-4 px-4 py-2.5 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl text-xs text-red-600 dark:text-red-300">
               {libraryError}
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-100/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-all duration-300 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+          <div className="bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100/80 dark:border-white/10 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_14px_rgba(0,0,0,0.35)] transition-all duration-300 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -1002,16 +1013,16 @@ const DocumentManagement = () => {
                     <th className="text-left px-4 py-2.5 font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                   {libraryLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-xs">
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-xs">
                         Loading library…
                       </td>
                     </tr>
                   ) : filteredLibrary.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-xs">
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-xs">
                         No files found in library.
                       </td>
                     </tr>
@@ -1019,16 +1030,16 @@ const DocumentManagement = () => {
                     filteredLibrary.map((doc) => {
                       const ext = extFromFilename(doc.filename);
                       return (
-                        <tr key={doc.doc_id} className="hover:bg-gray-50 transition-all duration-300">
-                          <td className="px-4 py-3 text-gray-800 font-medium whitespace-nowrap max-w-xs truncate">
+                        <tr key={doc.doc_id} className="hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all duration-300">
+                          <td className="px-4 py-3 text-gray-800 dark:text-gray-100 font-medium whitespace-nowrap max-w-xs truncate">
                             <div className="flex items-center gap-2">
-                              <FileText size={14} className="text-gray-400 flex-shrink-0" />
+                              <FileText size={14} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                               {doc.filename}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ext}</td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatSize(doc.file_size)}</td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(doc.uploaded_at)}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{ext}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatSize(doc.file_size)}</td>
+                          <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatDate(doc.uploaded_at)}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <KbBadge status={doc.kb_status} />
                           </td>
@@ -1040,7 +1051,7 @@ const DocumentManagement = () => {
               </table>
             </div>
             {filteredLibrary.length > 0 && (
-              <div className="px-4 py-2.5 border-t border-gray-100 text-xs text-gray-400">
+              <div className="px-4 py-2.5 border-t border-gray-100 dark:border-white/10 text-xs text-gray-400 dark:text-gray-500">
                 {filteredLibrary.length} file{filteredLibrary.length !== 1 ? "s" : ""} in library
               </div>
             )}

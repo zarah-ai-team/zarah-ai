@@ -5,10 +5,21 @@ All APIs are completely free and require NO API keys.
 import os
 import re
 import requests
+from functools import lru_cache
 from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger("real_time_search")
+
+# Wikipedia silently returns 403 to clients with the default `python-requests/X.Y.Z`
+# UA. Send a descriptive UA per their robot policy.
+_WIKI_HEADERS = {
+    "User-Agent": os.getenv(
+        "WIKI_USER_AGENT",
+        f"ZarahAI-TravelAssistant/1.0 (+https://github.com/anthropic-quickstarts; contact: {os.getenv('WIKI_CONTACT_EMAIL', 'support@zarah-ai.example')})",
+    ),
+    "Accept": "application/json",
+}
 
 # Overpass API rejects requests without a descriptive UA (returns 406 Not Acceptable).
 # It also wants a JSON-friendly Accept and POSTs for large queries.
@@ -20,20 +31,117 @@ _OVERPASS_HEADERS = {
     "Accept": "application/json",
 }
 
-# ============ GOOGLE SEARCH (Free via googlesearch-python) ============
+# Resolve the optional googlesearch module ONCE at import time. The pip package
+# `googlesearch-python` may or may not be installed; either way we just record it
+# and never spam the log on every call.
+try:
+    from googlesearch import search as _gsearch  # type: ignore
+    _GOOGLESEARCH_AVAILABLE = True
+except Exception:
+    _gsearch = None
+    _GOOGLESEARCH_AVAILABLE = False
+    logger.info("googlesearch-python not available — relying on Tavily REST for web search.")
+
+# Tokens that look like fields/labels/categories rather than real place names.
+# We strip these from a destinations list before sending it off to enrichment so
+# we don't end up Wikipedia-searching for "Date" or "Star".
+_NON_PLACE_TOKENS = frozenset({
+    "date", "dates", "start", "end", "from", "to", "checkin", "checkout",
+    "star", "stars", "5-star", "4-star", "3-star",
+    "hotel", "hotels", "resort", "resorts", "villa", "villas",
+    "trip", "tour", "vacation", "holiday", "itinerary", "package",
+    "lunch", "dinner", "breakfast", "meal", "meals",
+    "pax", "person", "persons", "people", "traveler", "travelers",
+    "duration", "nights", "days", "morning", "afternoon", "evening",
+    "transport", "vehicle", "guide", "driver",
+    "leisure", "corporate", "mice", "incentive", "honeymoon", "family",
+})
+
+
+def sanitize_place_list(places: List[str]) -> List[str]:
+    """Drop obvious non-place tokens and dedupe (case-insensitive).
+    Caller should treat the result as ground truth for enrichment queries.
+    """
+    if not places:
+        return []
+    out: List[str] = []
+    seen = set()
+    for raw in places:
+        if not isinstance(raw, str):
+            continue
+        cand = raw.strip().strip(",.;:")
+        if not cand:
+            continue
+        low = cand.lower()
+        if low in _NON_PLACE_TOKENS:
+            continue
+        # Drop anything that's clearly not a place: digits, very short tokens
+        if any(ch.isdigit() for ch in cand):
+            continue
+        if len(cand) < 2:
+            continue
+        key = low
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cand)
+    return out
+
+# ============ WEB SEARCH (Tavily REST → googlesearch-python fallback) ============
+# `googlesearch-python` scrapes Google's HTML and is routinely blocked by their bot
+# detection — it silently returns 0 results. We route through Tavily's REST endpoint
+# (the same provider used by the MCP web-search stage) when TAVILY_API_KEY is set,
+# and only fall back to the scraper when it isn't.
+def _tavily_rest_search(query: str, num_results: int = 5) -> List[Dict[str, str]]:
+    key = os.getenv("TAVILY_API_KEY", "")
+    if not key or key.startswith("tvly-YOUR"):
+        return []
+    try:
+        r = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": key,
+                "query": query,
+                "max_results": max(1, min(num_results, 10)),
+                "search_depth": "basic",
+            },
+            timeout=8,
+        )
+        r.raise_for_status()
+        data = r.json() or {}
+        out: List[Dict[str, str]] = []
+        for item in (data.get("results") or [])[:num_results]:
+            out.append({
+                "url": item.get("url") or "",
+                "title": (item.get("title") or item.get("url") or "")[:160],
+                "snippet": (item.get("content") or "")[:300],
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"Tavily REST search failed: {e}")
+        return []
+
+
 def google_search(query: str, num_results: int = 5) -> List[Dict[str, str]]:
     """
-    Search Google for real-time information about a destination.
-    Uses googlesearch-python package (no API key required).
+    Search the web for real-time information about a destination.
+    Prefers Tavily REST (reliable, returns title/url/snippet); falls back to
+    googlesearch-python only when Tavily isn't configured AND the optional
+    package is installed (we silently skip when it's missing).
     """
-    try:
-        from googlesearch import search as gsearch
-        results = []
-        for url in gsearch(query, num_results=num_results, lang="en", sleep_interval=1):
-            results.append({"url": url, "title": url.split("/")[-1].replace("-", " ").replace("_", " ")[:80]})
+    results = _tavily_rest_search(query, num_results=num_results)
+    if results:
         return results
+    if not _GOOGLESEARCH_AVAILABLE or _gsearch is None:
+        # No Tavily results and no scraper installed — return empty quietly.
+        return []
+    try:
+        scraped: List[Dict[str, str]] = []
+        for url in _gsearch(query, num_results=num_results, lang="en", sleep_interval=1):
+            scraped.append({"url": url, "title": url.split("/")[-1].replace("-", " ").replace("_", " ")[:80], "snippet": ""})
+        return scraped
     except Exception as e:
-        logger.error(f"Google search failed: {e}")
+        logger.warning(f"Web search scraper failed: {e}")
         return []
 
 
@@ -72,12 +180,12 @@ def search_wikipedia(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             'format': 'json',
             'srlimit': limit
         }
-        r = requests.get(url, params=params, timeout=5)
+        r = requests.get(url, params=params, headers=_WIKI_HEADERS, timeout=5)
         r.raise_for_status()
         results = r.json().get('query', {}).get('search', [])
         return [{'title': r['title'], 'snippet': r['snippet']} for r in results]
     except Exception as e:
-        logger.error(f"Wikipedia search failed: {e}")
+        logger.warning(f"Wikipedia search failed: {e}")
         return []
 
 
@@ -88,7 +196,7 @@ def get_wikipedia_summary(title: str) -> Dict[str, Any]:
     """
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title)}"
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, headers=_WIKI_HEADERS, timeout=5)
         r.raise_for_status()
         data = r.json()
         return {
@@ -99,7 +207,7 @@ def get_wikipedia_summary(title: str) -> Dict[str, Any]:
             'url': data.get('content_urls', {}).get('desktop', {}).get('page')
         }
     except Exception as e:
-        logger.error(f"Wikipedia summary failed: {e}")
+        logger.warning(f"Wikipedia summary failed: {e}")
         return {}
 
 
@@ -136,7 +244,7 @@ def search_nearby_attractions(latitude: float, longitude: float, radius: int = 5
         out center {limit};
         """
         
-        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=15)
+        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=8)
         r.raise_for_status()
         data = r.json()
         
@@ -160,7 +268,7 @@ def search_nearby_attractions(latitude: float, longitude: float, radius: int = 5
         
         return attractions[:limit]
     except Exception as e:
-        logger.error(f"Nearby attractions search failed: {e}")
+        logger.warning(f"Nearby attractions search failed: {e}")
         return []
 
 
@@ -182,7 +290,7 @@ def search_attractions_by_name(city: str, category: str = None, limit: int = 10)
         else:
             query = f'[bbox:-90,-180,90,180];(node["name"~"{city}"];way["name"~"{city}"];node["tourism"]["name"~"{city}"];way["tourism"]["name"~"{city}"];);out center {limit};'
         
-        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=15)
+        r = requests.post(overpass_url, data={'data': query}, headers=_OVERPASS_HEADERS, timeout=8)
         r.raise_for_status()
         data = r.json()
         
@@ -205,7 +313,7 @@ def search_attractions_by_name(city: str, category: str = None, limit: int = 10)
         
         return attractions[:limit]
     except Exception as e:
-        logger.error(f"Attractions by name search failed: {e}")
+        logger.warning(f"Attractions by name search failed: {e}")
         return []
 
 
@@ -308,6 +416,214 @@ def enrich_destination(destination: str) -> Dict[str, Any]:
 
 
 # ============ REAL-TIME PRICING (Free APIs — No Key Required) ============
+
+# ── Categorical price mining (date-anchored, from Tavily/Wikipedia prose) ─────
+# Tavily returns prose like "5-star hotels in Phuket cost $150-250/night in April 2026,
+# private taxi hire averages $80/day, meals at local restaurants $15-30 per person".
+# We mine each price, look at nearby keywords (within ±60 chars), and bucket it into
+# hotel/transport/meal categories. Then convert to the user's chosen currency.
+
+# Currency-aware extraction: returns (amount, currency_code) tuples.
+_AMOUNT_REGEX = re.compile(
+    r"""
+    (?P<curr_pre>USD|EUR|GBP|INR|AED|SGD|JPY|AUD|CAD|THB|\$|€|£|₹)?
+    \s*
+    (?P<amount>\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)
+    \s*
+    (?P<curr_post>USD|EUR|GBP|INR|AED|SGD|JPY|AUD|CAD|THB|\$|€|£|₹|dollars?|euros?|pounds?|rupees?|dirhams?|baht)?
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+_SYMBOL_TO_CODE = {"$": "USD", "€": "EUR", "£": "GBP", "₹": "INR"}
+_WORD_TO_CODE = {
+    "DOLLAR":"USD","DOLLARS":"USD","EURO":"EUR","EUROS":"EUR","POUND":"GBP","POUNDS":"GBP",
+    "RUPEE":"INR","RUPEES":"INR","DIRHAM":"AED","DIRHAMS":"AED","BAHT":"THB",
+}
+_KNOWN_CODES = {"USD","EUR","GBP","INR","AED","SGD","JPY","AUD","CAD","THB"}
+
+# Approximate USD conversion table for filtering plausibility ranges only —
+# the *real* conversion uses live Frankfurter rates (see _convert_via_fx below).
+_APPROX_TO_USD = {
+    "USD": 1.0, "EUR": 1.09, "GBP": 1.27, "INR": 0.012, "AED": 0.272,
+    "SGD": 0.74, "JPY": 0.0066, "AUD": 0.66, "CAD": 0.73, "THB": 0.028,
+}
+
+# Keyword sets for bucketing prices by surrounding context
+_HOTEL_KEYWORDS    = ("hotel", "room", "night", "/night", "per night", "stay", "accommodation", "resort", "villa", "lodging")
+_TRANSPORT_KEYS    = ("taxi", "car hire", "vehicle hire", "private car", "minivan", "coach", "transfer", "transport", "rental", "/day", "per day", "daily rate", "chauffeur", "driver", "tuk-tuk", "uber", "grab")
+_MEAL_KEYS         = ("meal", "lunch", "dinner", "breakfast", "restaurant", "food", "cuisine", "dining", "per person", "/person", "per pax", "/pax")
+_ACTIVITY_KEYS     = ("entry", "ticket", "tour", "attraction", "admission", "guided", "experience", "activity")
+
+
+def _normalise_currency(curr: str) -> Optional[str]:
+    if not curr:
+        return None
+    curr = curr.upper().strip()
+    if curr in _SYMBOL_TO_CODE:
+        return _SYMBOL_TO_CODE[curr]
+    if curr in _WORD_TO_CODE:
+        return _WORD_TO_CODE[curr]
+    if curr in _KNOWN_CODES:
+        return curr
+    return None
+
+
+def _categorise_price(text: str, start: int, end: int) -> Optional[str]:
+    """Bucket a price into 'hotel' / 'transport' / 'meal' / 'activity' using
+    the strongest available signal:
+
+    1. Suffix unit attached to the number — '/night' = hotel, '/day' = transport,
+       '/person' = meal-or-activity (disambiguated by tight context).
+    2. Keywords in the 40 chars BEFORE the price (closest signal wins).
+
+    Returns None when the price is genuinely ambiguous (we'd rather drop it than
+    pollute the average).
+    """
+    after_lo = text[end:end + 22].lower()
+    before_lo = text[max(0, start - 40):start].lower()
+
+    # 1) Suffix unit — strongest signal because it's directly attached
+    if any(s in after_lo for s in ("/night", "/ night", " per night", " a night", "/room", " per room")):
+        return "hotel"
+    if any(s in after_lo for s in ("/day", "/ day", " per day", " a day", "/daily", " daily rate")):
+        return "transport"
+    if any(s in after_lo for s in ("/person", "/pax", " per person", " per pax", "/head", " per head")):
+        # /person is shared by meals, activities, and pax-priced transport.
+        # Disambiguate via the immediately-preceding noun.
+        if any(k in before_lo for k in ("meal", "lunch", "dinner", "breakfast", "restaurant", "food", "dining", "cuisine")):
+            return "meal"
+        if any(k in before_lo for k in ("entry", "ticket", "tour", "attraction", "admission", "sightseeing", "guide", "experience", "activity")):
+            return "activity"
+        if any(k in before_lo for k in ("transport", "transfer", "taxi", "shuttle", "ride")):
+            return "transport"
+        return "meal"  # bias to meal for /person when context is silent
+
+    # 2) Tight pre-price window — only the words nearest the price matter
+    if any(k in before_lo for k in ("hotel", "room", "resort", "villa", "accommodation", "stay", "lodging", "suite", "guesthouse")):
+        return "hotel"
+    if any(k in before_lo for k in ("taxi", "transfer", "transport", "minivan", "coach", "driver", "vehicle", "chauffeur", "rental", "tuk-tuk", "grab", "uber", "car hire", "limousine", "shuttle")):
+        return "transport"
+    if any(k in before_lo for k in ("meal", "lunch", "dinner", "breakfast", "restaurant", "food", "dining", "cuisine")):
+        return "meal"
+    if any(k in before_lo for k in ("entry", "ticket", "tour", "attraction", "admission", "sightseeing", "guide", "experience")):
+        return "activity"
+    return None
+
+
+def _is_plausible(category: str, usd_value: float) -> bool:
+    """Reject prices that are clearly not in this category's typical range
+    (e.g. a $5 'hotel' is a typo; a $5000 'meal' is a banquet, not per-person)."""
+    if category == "hotel":     return 25   <= usd_value <= 1500
+    if category == "transport": return 15   <= usd_value <= 800
+    if category == "meal":      return 3    <= usd_value <= 200
+    if category == "activity":  return 2    <= usd_value <= 500
+    return False
+
+
+@lru_cache(maxsize=64)
+def _fx_rate_cached(from_curr: str, to_curr: str) -> Optional[float]:
+    """Cached wrapper around get_exchange_rate so we don't hit Frankfurter
+    repeatedly for the same currency pair within a session."""
+    if from_curr == to_curr:
+        return 1.0
+    return get_exchange_rate(from_curr, to_curr)
+
+
+def _convert_via_fx(amount: float, from_curr: str, to_curr: str) -> Optional[float]:
+    rate = _fx_rate_cached(from_curr, to_curr)
+    if rate is None:
+        # Fall back to approx table — better than dropping the data point
+        try:
+            usd = amount * _APPROX_TO_USD.get(from_curr, 1.0)
+            inv = _APPROX_TO_USD.get(to_curr)
+            if not inv:
+                return None
+            return round(usd / inv, 2)
+        except Exception:
+            return None
+    return round(amount * rate, 2)
+
+
+def mine_categorical_prices(text: str, target_currency: str = "USD") -> Dict[str, Any]:
+    """Mine prices from prose, bucket by surrounding context, convert to target currency.
+
+    Returns:
+        {
+          "hotel_per_night":    {"avg": 145.0, "min": 90, "max": 220, "n": 6, "samples": [...]},
+          "transport_per_day":  {"avg": 78.0, ...},
+          "meal_per_person":    {"avg": 22.0, ...},
+          "activity_per_person":{"avg": 35.0, ...},
+          "currency": "USD",
+        }
+
+    Ranges are filtered to plausibility windows so a $5 hotel or $5000 meal don't
+    pollute the average.
+    """
+    target_currency = (target_currency or "USD").upper()
+    out = {
+        "hotel_per_night":     {"avg": None, "min": None, "max": None, "n": 0, "samples": []},
+        "transport_per_day":   {"avg": None, "min": None, "max": None, "n": 0, "samples": []},
+        "meal_per_person":     {"avg": None, "min": None, "max": None, "n": 0, "samples": []},
+        "activity_per_person": {"avg": None, "min": None, "max": None, "n": 0, "samples": []},
+        "currency":            target_currency,
+    }
+    if not isinstance(text, str) or not text:
+        return out
+
+    buckets: Dict[str, List[float]] = {"hotel": [], "transport": [], "meal": [], "activity": []}
+    for m in _AMOUNT_REGEX.finditer(text):
+        curr_raw = m.group("curr_pre") or m.group("curr_post")
+        curr = _normalise_currency(curr_raw)
+        if not curr:
+            continue
+        try:
+            amount = float(m.group("amount").replace(",", "").replace(" ", ""))
+        except ValueError:
+            continue
+        # Reject obvious non-prices: years, IDs
+        if 1900 <= amount <= 2100 and curr == "USD":
+            continue
+        if amount <= 0:
+            continue
+
+        # Approx-USD plausibility check (cheaper than FX call for noise filter)
+        usd_approx = amount * _APPROX_TO_USD.get(curr, 1.0)
+        category = _categorise_price(text, m.start(), m.end())
+        if not category or not _is_plausible(category, usd_approx):
+            continue
+
+        # Real FX conversion to the target currency
+        converted = _convert_via_fx(amount, curr, target_currency)
+        if converted is None or converted <= 0:
+            continue
+        buckets[category].append(converted)
+
+    _bucket_keys = {
+        "hotel":     "hotel_per_night",
+        "transport": "transport_per_day",
+        "meal":      "meal_per_person",
+        "activity":  "activity_per_person",
+    }
+    for src, dst in _bucket_keys.items():
+        vals = sorted(buckets[src])
+        if not vals:
+            continue
+        # Trimmed mean if we have enough samples; plain mean otherwise
+        if len(vals) >= 4:
+            k = max(1, len(vals) // 5)
+            trimmed = vals[k:-k] or vals
+        else:
+            trimmed = vals
+        avg = round(sum(trimmed) / len(trimmed), 2)
+        out[dst] = {
+            "avg":     avg,
+            "min":     vals[0],
+            "max":     vals[-1],
+            "n":       len(vals),
+            "samples": vals[:8],
+        }
+    return out
+
 
 def get_exchange_rate(from_currency: str = "EUR", to_currency: str = "INR") -> Optional[float]:
     """

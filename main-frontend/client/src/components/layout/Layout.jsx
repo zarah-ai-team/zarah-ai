@@ -29,7 +29,7 @@ const Layout = () => {
       </div>
 
       {/* ---- Desktop layout ---- */}
-      <div className="hidden md:flex h-screen overflow-hidden bg-white dark:bg-[#2c2e34] p-3 gap-3 font-poppins">
+      <div className="hidden md:flex h-screen overflow-hidden bg-white dark:bg-[#1F1F1F] p-3 gap-3 font-poppins">
         <Sidebar
           showProfile={isChatPage}
           collapsed={sidebarCollapsed}

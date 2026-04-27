@@ -29,21 +29,22 @@ html, body, *, *::before, *::after {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Dark mode — cool neutral charcoal, lighter and smoother than near-black.
-   Pairs well with the brand yellow accents instead of being overpowered by them. */
+/* Dark mode — sidebar-matched near-black palette for a unified product feel.
+   Primary surface (#1F1F1F) matches the sidebar; elevated surfaces use #2A2929
+   so cards still feel raised against the page. */
 html.dark body {
-  background-color: #2c2e34;
+  background-color: #1F1F1F;
   color: #e6e8ec;
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background: #34363c;
+  background: #2A2929;
 }
 html.dark ::-webkit-scrollbar-thumb {
-  background: #50535a;
+  background: #444342;
 }
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #6a6e76;
+  background: #5A5755;
 }
 
 button,

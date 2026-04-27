@@ -36,6 +36,8 @@ from client_manager import (
     search_clients,
     add_itinerary_to_client,
     get_client_itineraries,
+    get_client_preferences,
+    has_meaningful_preferences,
 )
 from itinerary_database import get_itinerary_template, list_available_destinations
 from src.services.kb.document_processor import get_user_kb_docs
@@ -146,7 +148,7 @@ _FORMAL_FIELD_KEYS = [
     "guide_required", "walking_tolerance", "senior_friendly",
     "comfort_stops", "preferred_activities",
     "event_type", "client_type", "trip_style",
-    "contact_person", "raw_text",
+    "contact_person", "raw_text", "currency",
 ]
 
 
@@ -159,6 +161,8 @@ def _get_missing_formal_fields(fields: dict) -> list:
         missing.append(("pax", "number of pax (travelers)"))
     if not (fields.get("total_nights") or fields.get("nights") or fields.get("nights_per_city")):
         missing.append(("total_nights", "trip duration (number of nights)"))
+    if not (fields.get("trip_start_date") or fields.get("checkin_date")):
+        missing.append(("trip_start_date", "trip start date (so I can label each day with the right DD/MM/YYYY)"))
     return missing
 
 
@@ -184,7 +188,7 @@ def _build_formal_clarification(fields: dict, missing: list) -> str:
 
     # Ask for ONE field at a time — pick by priority so the user never sees a
     # multi-question wall. Order: destination first, then pax, then duration.
-    _PRIORITY = ["destination", "destinations", "pax", "total_nights", "nights"]
+    _PRIORITY = ["destination", "destinations", "pax", "total_nights", "nights", "trip_start_date"]
     first = None
     for key, label in missing:
         if key in _PRIORITY:
@@ -333,6 +337,7 @@ def _build_confirmation_dict(fields: dict) -> dict:
         "event_type": fields.get("event_type") or "leisure",
         "preferred_activities": fields.get("preferred_activities") or [],
         "walking_tolerance": fields.get("walking_tolerance") or "",
+        "currency": (fields.get("currency") or "USD"),
     }
 
 
@@ -445,12 +450,17 @@ async def chat(request: Request):
         except Exception:
             parsed = None
 
-    # Normalize input into 'session_id' and 'message'
+    # Normalize input into 'session_id', 'message', and optional 'meta' (sideband data
+    # like {currency: "USD"} that came from the UI without polluting the user-visible
+    # message text).
     session_id = None
     message_text = None
+    meta_payload: dict = {}
     if isinstance(parsed, dict):
         session_id = parsed.get("session_id") or parsed.get("sid")
         message_text = parsed.get("message") or parsed.get("text")
+        if isinstance(parsed.get("meta"), dict):
+            meta_payload = parsed["meta"]
     else:
         # Treat the raw body as the message (plain text)
         message_text = body_text
@@ -473,11 +483,25 @@ async def chat(request: Request):
     # initialize session if needed
     sid = req.session_id or str(uuid.uuid4())
     if sid not in SESSIONS:
-        SESSIONS[sid] = {"fields": {}, "history": []}
+        # Fresh session: client linkage / preferences will be populated when
+        # the chat is loaded via /api/chats/{sid} or created via /api/chats.
+        SESSIONS[sid] = {
+            "fields": {},
+            "history": [],
+            "client_id": None,
+            "client_preferences": {},
+        }
 
     session = SESSIONS[sid]
     # prepare sanity checks log inside session for visibility
     session.setdefault("sanity_checks", [])
+
+    # Apply sideband meta from the UI (e.g. currency picked on the confirmation card)
+    # before any of the gating logic runs so the LLM prompt can pick it up below.
+    if meta_payload:
+        _meta_cur = str(meta_payload.get("currency") or "").strip().upper()
+        if _meta_cur in {"USD", "EUR", "INR", "GBP", "AED", "SGD", "JPY", "AUD", "CAD"}:
+            session.setdefault("fields", {})["currency"] = _meta_cur
 
     # Try to extract username from Authorization header for chat persistence
     _chat_username = None
@@ -1157,8 +1181,23 @@ async def chat(request: Request):
 
     # Start parallel tasks: attractions lookup and real-time enrichment.
     # For multi-destination trips, use a combined query (all cities).
-    _all_dests = fields.get("destinations") or []
-    if _all_dests and isinstance(_all_dests, list):
+    # Sanitize destinations first — extraction sometimes appends label tokens
+    # like "Date" or "Star" which corrupt downstream Wikipedia/Tavily queries.
+    try:
+        from real_time_search import sanitize_place_list as _sanitize_places
+    except Exception:
+        _sanitize_places = lambda lst: lst
+    _all_dests_raw = fields.get("destinations") or []
+    _all_dests = _sanitize_places(_all_dests_raw) if isinstance(_all_dests_raw, list) else []
+    if _all_dests_raw and not _all_dests:
+        # Everything got filtered out; keep the raw list so downstream still has something
+        _all_dests = list(_all_dests_raw)
+    if _all_dests_raw != _all_dests:
+        sc(f"Sanitized destinations: {_all_dests_raw} -> {_all_dests}")
+        # Persist the cleaned list so subsequent queries don't re-pick the noise
+        fields["destinations"] = _all_dests
+
+    if _all_dests:
         dest_for_lookup = ", ".join(_all_dests)
     else:
         dest_for_lookup = fields.get("destination") or ""
@@ -1490,10 +1529,27 @@ async def chat(request: Request):
             + ". Reflect this in hotel costs.\n"
         )
 
+    # Output currency — picked by the user on the confirmation card. Defaults to USD.
+    _currency_code = (fields.get("currency") or "USD").upper()
+    _CUR_SYMBOLS = {"USD": "$", "EUR": "€", "INR": "₹", "GBP": "£", "AED": "AED ", "SGD": "S$", "JPY": "¥", "AUD": "A$", "CAD": "C$"}
+    _CUR_ROUND   = {"USD": 25,  "EUR": 25,  "INR": 500, "GBP": 25,  "AED": 100,    "SGD": 25,  "JPY": 500, "AUD": 25,  "CAD": 25}
+    _currency_symbol = _CUR_SYMBOLS.get(_currency_code, _currency_code + " ")
+    _currency_round  = _CUR_ROUND.get(_currency_code, 25)
+    _currency_directive = (
+        f"OUTPUT CURRENCY (HARD REQUIREMENT — overrides every other currency mention below): "
+        f"All monetary values in this itinerary — cost_breakdown, hotel rates, "
+        f"transport_note daily hire, meal costs, entry fees, guide fees, miscellaneous — "
+        f"MUST be expressed in {_currency_code} ({_currency_symbol.strip()}). "
+        f"If the schema or any reference numbers below say INR, treat that as currency-agnostic and convert to {_currency_code}. "
+        f"Use the {_currency_symbol.strip()} prefix on every figure (e.g. '{_currency_symbol}120/person'). "
+        f"Round each figure to the nearest {_currency_round} {_currency_code}. Be consistent across the entire output.\n\n"
+    )
+
     system_prompt = (
         "You are a senior travel consultant at a professional DMC/MICE agency. "
         "Produce a COMPLETE, DETAILED, PROFESSIONAL day-by-day itinerary based on the trip details provided.\n\n"
         + (_ct_instructions + "\n" if _ct_instructions else "")
+        + _currency_directive
         + "OUTPUT FORMAT: Return ONLY a single valid JSON object. No markdown fences, no prose, no commentary outside the JSON.\n\n"
         "JSON SCHEMA (follow exactly):\n"
         "{\n"
@@ -1507,7 +1563,7 @@ async def chat(request: Request):
         '    {\n'
         '      "day": <number>,\n'
         '      "city": "City name for this day",\n'
-        '      "date": "DD Mon YYYY",\n'
+        '      "date": "DD/MM/YYYY (start date + (day - 1)) — use exactly this slash-separated format",\n'
         '      "summary": "One-line evocative theme for the day (e.g. \'Ancient temples, spice markets & sunset dhow cruise\')",\n'
         '      "morning": "07:30 – Breakfast at [specific hotel restaurant or local café] ([cuisine], approx INR [X]/person). 09:00 – Depart hotel by private [vehicle type] (approx [X] min drive). 09:30 – Arrive at [Landmark/Venue]; guided tour covering [specific features, historical context]; entry fee INR [X]/person; approx [X] hrs. 11:30 – Walk to [next venue or market]; highlights include [specific stalls/items/sights]. 12:30 – Lunch at [Restaurant Name], [locality]; signature dishes: [dish1, dish2]; approx INR [X]/person.",\n'
         '      "afternoon": "14:00 – Transfer to [Venue/Area] (approx [X] min). 14:30 – [Activity at Venue]; entry INR [X]; duration approx [X] hrs; [specific things to see/do]. 16:30 – [Next activity or leisure time — specific venue, what to look for]. 17:30 – Return transfer to hotel; freshen up.",\n'
@@ -1592,7 +1648,13 @@ async def chat(request: Request):
             loc = f" — {f['hotel_location_preference']}" if f.get("hotel_location_preference") else ""
             lines.append(f"Hotel: {f['hotel_category']}{loc}")
         if f.get("trip_start_date"):
-            lines.append(f"Start date: {f['trip_start_date']}")
+            _sd = f["trip_start_date"]
+            try:
+                from datetime import datetime as _dts2
+                _sd_pretty = _dts2.strptime(_sd, "%Y-%m-%d").strftime("%d/%m/%Y")
+                lines.append(f"Start date: {_sd_pretty} (Day 1) — stamp Day N as start_date + (N-1), formatted DD/MM/YYYY")
+            except Exception:
+                lines.append(f"Start date: {_sd}")
         if f.get("event_type"):
             lines.append(f"Trip type: {f['event_type']}")
         if f.get("transport_preference"):
@@ -1611,7 +1673,10 @@ async def chat(request: Request):
     _raw_req = fields.get("raw_text", "")
     _fields_summary = _fmt_fields_for_prompt(fields)
 
-    user_prompt = "CONFIRMED TRIP DETAILS:\n" + _fields_summary
+    user_prompt = (
+        f"CONFIRMED TRIP DETAILS:\n{_fields_summary}\n"
+        f"OUTPUT CURRENCY: {_currency_code} ({_currency_symbol.strip()}) — express ALL prices in this currency."
+    )
     if predicted_cost:
         user_prompt += f"\n\nML cost estimate: USD {predicted_cost:.0f}"
     if price_ctx:
@@ -1724,12 +1789,19 @@ async def chat(request: Request):
         _has_kb = bool(kb_summary)
         _max_cities = 3
 
-        # Build a date hint for price queries (current month/year if no trip date set)
-        from datetime import date as _date
-        _trip_when = (
-            str(fields.get("trip_start_date") or fields.get("checkin_date") or "").strip()
-            or _date.today().strftime("%B %Y")
-        )
+        # Build a date hint for price queries — use natural-language "April 2026"
+        # so Tavily's web search returns season-relevant prices instead of generic
+        # numbers. Falls back to the current month when no trip date is set.
+        from datetime import date as _date, datetime as _dtw
+        _raw_when = str(fields.get("trip_start_date") or fields.get("checkin_date") or "").strip()
+        _trip_when = ""
+        if _raw_when:
+            try:
+                _trip_when = _dtw.strptime(_raw_when, "%Y-%m-%d").strftime("%B %Y")
+            except Exception:
+                _trip_when = _raw_when
+        if not _trip_when:
+            _trip_when = _date.today().strftime("%B %Y")
         _pax_hint = fields.get("pax") or 2
         _hotel_cat = fields.get("hotel_category") or "4-star"
 
@@ -1773,6 +1845,47 @@ async def chat(request: Request):
             if _tavily_blocks:
                 realtime_context += "\n\nWeb Search Results (Tavily):\n" + "\n\n".join(_tavily_blocks)
                 sc(f"Tavily: injected {len(_tavily_blocks)} city block(s) into prompt")
+
+                # ── Mine date-anchored prices per city, in the user's currency ──
+                # Tavily prose contains real-world rates ("4-star Phuket: $150/night",
+                # "private taxi $80/day"). We extract each price, bucket by surrounding
+                # context (hotel/transport/meal/activity), convert via live FX to the
+                # user's chosen currency, and inject a structured block so the LLM
+                # uses these numbers in cost_breakdown instead of hallucinating.
+                try:
+                    from real_time_search import mine_categorical_prices as _mine_prices
+                    _live_lines = []
+                    _city_idx = list(_search_cities[:_max_cities])
+                    for _i, _block in enumerate(_tavily_results):
+                        if not isinstance(_block, str) or not _block.strip():
+                            continue
+                        _city_name = _city_idx[_i] if _i < len(_city_idx) else "destination"
+                        _mined = _mine_prices(_block, target_currency=_currency_code)
+                        _bits = []
+                        for _k, _label in (
+                            ("hotel_per_night",     "hotel/night"),
+                            ("transport_per_day",   "transport/day"),
+                            ("meal_per_person",     "meal/person"),
+                            ("activity_per_person", "activity/person"),
+                        ):
+                            _b = _mined.get(_k) or {}
+                            if _b.get("avg") is not None and _b.get("n", 0) > 0:
+                                _bits.append(
+                                    f"{_label} ~{_currency_symbol}{_b['avg']:.0f} "
+                                    f"(range {_currency_symbol}{_b['min']:.0f}-{_currency_symbol}{_b['max']:.0f}, n={_b['n']})"
+                                )
+                        if _bits:
+                            _live_lines.append(f"  {_city_name}: " + "; ".join(_bits))
+                    if _live_lines:
+                        _date_anchor = (fields.get("trip_start_date") or fields.get("checkin_date") or "").strip() or "current"
+                        realtime_context += (
+                            f"\n\nLive Prices (web-mined from Tavily, anchored to trip start {_date_anchor}, in {_currency_code}):\n"
+                            + "\n".join(_live_lines)
+                            + f"\n  USE THESE NUMBERS in cost_breakdown and per-day costs. They reflect real {_date_anchor} rates."
+                        )
+                        sc(f"Mined live prices from Tavily for {len(_live_lines)} city/cities; injected to prompt")
+                except Exception as _me:
+                    sc(f"Live price mining skipped: {type(_me).__name__}: {_me}")
             else:
                 sc("Tavily: no usable results returned")
 
@@ -1848,6 +1961,39 @@ async def chat(request: Request):
     if fields.get("preferred_activities"):
         _trip_detail_lines.append(f"Preferred activities: {', '.join(fields['preferred_activities'])}")
 
+    # ── Client preferences block ────────────────────────────────────────────
+    # When the chat is linked to a client, surface their saved preferences as
+    # additional steering context. These are SOFT preferences — anything the
+    # user said in chat (already in `fields`) wins, but the LLM can lean on
+    # these for activity/hotel/cuisine choices when the request is ambiguous.
+    _client_prefs = session.get("client_preferences") if isinstance(session, dict) else None
+    if _client_prefs and has_meaningful_preferences(_client_prefs):
+        _pref_lines: List[str] = []
+        if _client_prefs.get("travel_style"):
+            _pref_lines.append(f"Travel style: {_client_prefs['travel_style']}")
+        if _client_prefs.get("budget_level"):
+            _pref_lines.append(f"Budget level: {_client_prefs['budget_level']}")
+        if _client_prefs.get("pace"):
+            _pref_lines.append(f"Preferred pace: {_client_prefs['pace']}")
+        if _client_prefs.get("hotel_categories"):
+            _pref_lines.append(f"Preferred hotel tier(s): {', '.join(_client_prefs['hotel_categories'])}")
+        if _client_prefs.get("cuisine"):
+            _pref_lines.append(f"Cuisine / dietary: {', '.join(_client_prefs['cuisine'])}")
+        if _client_prefs.get("activities"):
+            _pref_lines.append(f"Activity interests: {', '.join(_client_prefs['activities'])}")
+        if _client_prefs.get("preferred_destinations"):
+            _pref_lines.append(f"Favourite destinations: {', '.join(_client_prefs['preferred_destinations'])}")
+        if _client_prefs.get("avoid"):
+            _pref_lines.append(f"Avoid: {', '.join(_client_prefs['avoid'])}")
+        if _client_prefs.get("special_requirements"):
+            _pref_lines.append(f"Special requirements: {_client_prefs['special_requirements']}")
+        if _client_prefs.get("notes"):
+            _pref_lines.append(f"Notes: {_client_prefs['notes']}")
+        if _pref_lines:
+            _trip_detail_lines.append("")
+            _trip_detail_lines.append("Client preferences (soft defaults — user requests in chat take priority):")
+            _trip_detail_lines.extend(f"  • {l}" for l in _pref_lines)
+
     _trip_details_block = (
         "TRIP DETAILS:\n" + "\n".join(f"  {l}" for l in _trip_detail_lines) + "\n"
         if _trip_detail_lines else f"User request:\n{fields}\n"
@@ -1857,12 +2003,13 @@ async def chat(request: Request):
         "Requirements:\n"
         "- Return exactly one JSON object and nothing else.\n"
         + (f"- The 'days' array MUST have EXACTLY {_num_days} entries ({_total_nights_int} nights + 1 arrival/departure day). This is non-negotiable.\n" if _num_days else "")
-        + "- Every day MUST have morning, afternoon, AND evening — each a detailed multi-sentence paragraph with HH:MM timings, real venue names, INR costs, and travel durations.\n"
-        "- Name specific restaurants for every meal — include 1-2 signature dishes and approx cost per person.\n"
-        "- Every day MUST have transport_note with the vehicle type and daily INR hire cost.\n"
-        "- The itinerary_summary field must be 4-6 sentences capturing the kind of trip (theme/character) and the experience the traveller will have at this destination — sensory highlights, pace, and what makes it memorable.\n"
-        "- cost_breakdown must be realistic and cover ALL days and ALL pax.\n"
+        + f"- Every day MUST have morning, afternoon, AND evening — each a detailed multi-sentence paragraph with HH:MM timings, real venue names, {_currency_code} costs (with {_currency_symbol.strip()} prefix), and travel durations.\n"
+        + "- Name specific restaurants for every meal — include 1-2 signature dishes and approx cost per person.\n"
+        + f"- Every day MUST have transport_note with the vehicle type and daily {_currency_code} hire cost.\n"
+        + "- The itinerary_summary field must be 4-6 sentences capturing the kind of trip (theme/character) and the experience the traveller will have at this destination — sensory highlights, pace, and what makes it memorable.\n"
+        + f"- cost_breakdown must be realistic and cover ALL days and ALL pax. ALL figures in {_currency_code} ({_currency_symbol.strip()}), rounded to nearest {_currency_round}.\n"
         + ("- Include a full-day Ferrari World plan only when explicitly requested and destination is Abu Dhabi.\n" if ferrari_requested else "")
+        + f"- OUTPUT CURRENCY (final reminder): every monetary figure must be in {_currency_code} with {_currency_symbol.strip()} prefix. Convert any reference INR amounts in this prompt to {_currency_code} before using them.\n"
         + "Return a single JSON object exactly matching the schema in the system prompt."
     )
     # Include the original raw request so the LLM picks up details our extractor
@@ -1923,7 +2070,7 @@ async def chat(request: Request):
         _notes = _live_price_ctx.get("notes", [])
         if _notes:
             _price_lines.append(f"  Sources: {'; '.join(_notes[:3])}")
-        _price_lines.append("  NOTE: Use these INR figures in cost_breakdown; do NOT invent generic USD costs.")
+        _price_lines.append(f"  NOTE: These are reference INR figures only — convert to {_currency_code} ({_currency_symbol.strip()}) for the final cost_breakdown. Do NOT invent generic costs.")
         _live_price_block = "\n".join(_price_lines) + "\n"
 
     if kb_summary:
@@ -2136,6 +2283,33 @@ async def chat(request: Request):
             "kb_warning": None if kb_docs_used > 0 else "No indexed documents found. Upload and index pricing/hotel documents to improve itinerary accuracy.",
         }
 
+    # ── Stamp deterministic per-day dates (DD/MM/YYYY) ───────────────────────
+    # Don't trust the LLM with date arithmetic — derive each day from
+    # trip_start_date + (day_index - 1) so dates are always correct and
+    # consistently formatted, regardless of what the model produced.
+    try:
+        from datetime import datetime as _dts, timedelta as _tds
+        _start_iso = (fields.get("trip_start_date") or fields.get("checkin_date") or "").strip()
+        if _start_iso and isinstance(itinerary_obj.get("days"), list):
+            try:
+                _start_dt = _dts.strptime(_start_iso, "%Y-%m-%d")
+            except Exception:
+                _start_dt = None
+            if _start_dt:
+                for _i, _day in enumerate(itinerary_obj["days"]):
+                    if not isinstance(_day, dict):
+                        continue
+                    _day_num = _day.get("day") or _day.get("day_number") or (_i + 1)
+                    try:
+                        _offset = max(0, int(_day_num) - 1)
+                    except Exception:
+                        _offset = _i
+                    _day["date"] = (_start_dt + _tds(days=_offset)).strftime("%d/%m/%Y")
+                itinerary_obj["start_date"] = _start_dt.strftime("%d/%m/%Y")
+                sc(f"Stamped per-day dates from start={_start_iso} ({len(itinerary_obj['days'])} days)")
+    except Exception as _de:
+        sc(f"Date stamping skipped: {_de}")
+
     # Use the LLM-provided itinerary to query live hotel prices (no mocks)
     # Determine destination, pax and nights from itinerary or session fields
     dest = itinerary_obj.get("destination") or fields.get("destination")
@@ -2291,6 +2465,9 @@ async def api_me(current_user: dict = Depends(get_current_user)):
 
 class NewChatRequest(BaseModel):
     chat_name: str = ""
+    # When set, the new chat is linked to this client and the planner will
+    # use their stored preferences as soft defaults / context for the LLM.
+    client_id: Optional[str] = None
 
 
 class UpdateChatMetadataRequest(BaseModel):
@@ -2305,22 +2482,81 @@ class UpdateChatMetadataRequest(BaseModel):
     saved_itinerary: Optional[dict] = None
 
 
+def _seed_fields_from_preferences(prefs: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate a client's stored preferences into pre-filled session fields
+    that the planner already understands. Soft defaults — the user can still
+    overwrite any of these by saying so in chat."""
+    if not prefs:
+        return {}
+    seeded: Dict[str, Any] = {}
+    style = (prefs.get("travel_style") or "").lower()
+    if style:
+        # Map travel style to hotel category if no explicit hotel preference
+        category_by_style = {
+            "luxury":    "5-Star Luxury",
+            "premium":   "5-Star",
+            "mid-range": "4-Star",
+            "budget":    "3-Star",
+        }
+        if not prefs.get("hotel_categories") and style in category_by_style:
+            seeded["hotel_category"] = category_by_style[style]
+    if prefs.get("hotel_categories"):
+        # Pick the highest-tier preferred hotel as the working default
+        order = ["3-Star", "4-Star", "4-Star Deluxe", "5-Star", "5-Star Luxury"]
+        cats = [c for c in prefs["hotel_categories"] if c in order]
+        if cats:
+            seeded["hotel_category"] = max(cats, key=lambda c: order.index(c))
+    if prefs.get("pace"):
+        seeded["pace"] = prefs["pace"]
+    if prefs.get("activities"):
+        seeded["preferred_activities"] = list(prefs["activities"])
+    if prefs.get("special_requirements"):
+        seeded["special_requirements"] = prefs["special_requirements"]
+    return seeded
+
+
 @app.post("/api/chats", tags=["Chats"])
 async def api_create_chat(req: NewChatRequest, current_user: dict = Depends(get_current_user)):
-    """Create a new chat session."""
+    """Create a new chat session, optionally linked to a client whose stored
+    preferences seed the planning context."""
     username = current_user["username"]
     chat = create_chat(username, chat_name=req.chat_name)
+
+    seeded_fields: Dict[str, Any] = {}
+    linked_client = None
+    if req.client_id:
+        linked_client = get_client(req.client_id)
+        if linked_client is None:
+            raise HTTPException(status_code=404, detail=f"Client {req.client_id} not found")
+        prefs = get_client_preferences(req.client_id)
+        seeded_fields = _seed_fields_from_preferences(prefs)
+        # Persist the link + a snapshot of preferences on the chat itself so
+        # the planner can read it later without an extra lookup, and so the
+        # itinerary list shows the right group/client name.
+        update_chat(username, chat["session_id"], {
+            "client_id": req.client_id,
+            "client_preferences": prefs,
+            "fields": dict(seeded_fields),
+            "metadata": {"group_client_name": linked_client.get("company_name", "")},
+        })
+
     # Also create an in-memory SESSIONS entry so /api/chat can use it
     SESSIONS[chat["session_id"]] = {
-        "fields": {},
+        "fields": dict(seeded_fields),
         "history": [],
         "sanity_checks": [],
+        "client_id": req.client_id,
+        "client_preferences": get_client_preferences(req.client_id) if req.client_id else {},
     }
+
     return {"success": True, "chat": {
         "session_id": chat["session_id"],
         "chat_name": chat["chat_name"],
         "created_at": chat["created_at"],
-        "metadata": chat["metadata"],
+        "metadata": {**chat["metadata"], "group_client_name": linked_client.get("company_name", "") if linked_client else ""},
+        "client_id": req.client_id,
+        "client": linked_client,
+        "seeded_fields": seeded_fields,
     }}
 
 
@@ -2348,6 +2584,10 @@ async def api_get_chat(session_id: str, current_user: dict = Depends(get_current
             "pending_confirmation": chat.get("pending_confirmation"),
             "pending_formal_request": chat.get("pending_formal_request"),
             "formal_request_detected": chat.get("formal_request_detected", False),
+            # Carry the client linkage forward so the LLM context block can
+            # apply preferences after a server restart or fresh page load.
+            "client_id": chat.get("client_id"),
+            "client_preferences": chat.get("client_preferences") or {},
         }
     # If the chat is paused on a confirmation card, attach the structured dict the
     # frontend needs to re-render it (otherwise the card text comes back as plain prose).
@@ -2748,6 +2988,21 @@ class Contact(BaseModel):
     phone: Optional[str] = None
 
 
+class ClientPreferences(BaseModel):
+    """Travel preferences attached to a client, used to seed itinerary
+    creation and steer LLM recommendations. All fields optional."""
+    travel_style: Optional[str] = None         # luxury | premium | mid-range | budget
+    budget_level: Optional[str] = None         # low | medium | high | luxury
+    pace: Optional[str] = None                 # relaxed | balanced | packed
+    hotel_categories: Optional[List[str]] = None
+    cuisine: Optional[List[str]] = None
+    activities: Optional[List[str]] = None
+    special_requirements: Optional[str] = None
+    preferred_destinations: Optional[List[str]] = None
+    avoid: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
 class ClientRequest(BaseModel):
     company_name: str
     client_type: str  # Corporate, Leisure, MICE, DMC
@@ -2762,6 +3017,7 @@ class ClientRequest(BaseModel):
     industry: str = "Other"  # Automotive, Technology, Finance, Hospitality, Retail, Manufacturing, Other
     lead_source: str = ""  # Website, Referral, Social Media, Cold Call, Event, etc.
     notes: str = ""
+    preferences: Optional[ClientPreferences] = None
 
     class Config:
         json_schema_extra = {
@@ -2797,6 +3053,7 @@ class ClientUpdateRequest(BaseModel):
     industry: Optional[str] = None
     lead_source: Optional[str] = None
     notes: Optional[str] = None
+    preferences: Optional[ClientPreferences] = None
 
 
 @app.post("/api/clients", tags=["Clients"])
@@ -2821,6 +3078,7 @@ async def create_new_client(req: ClientRequest):
             lead_source=req.lead_source,
             notes=req.notes,
             secondary_contact=req.secondary_contact.model_dump() if req.secondary_contact else None,
+            preferences=req.preferences.model_dump(exclude_none=True) if req.preferences else None,
         )
         return {"success": True, "client": client}
     except Exception as e:
@@ -2869,6 +3127,10 @@ async def update_client_details(client_id: str, req: ClientUpdateRequest):
     if "secondary_contact" in updates and updates["secondary_contact"] is not None:
         if hasattr(updates["secondary_contact"], "model_dump"):
             updates["secondary_contact"] = updates["secondary_contact"].model_dump()
+    # Strip any None entries from the preferences submodel so callers can do
+    # partial updates ("just change pace") without wiping the rest.
+    if "preferences" in updates and isinstance(updates["preferences"], dict):
+        updates["preferences"] = {k: v for k, v in updates["preferences"].items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
     try:

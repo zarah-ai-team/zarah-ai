@@ -25,9 +25,12 @@ import {
   getChatSession,
   updateChatMetadata,
   listChats,
+  createChat,
 } from "../services/chatService";
 import ItineraryDisplay, { generateItineraryPDF } from "../components/chat/ItineraryDisplay";
 import ConfirmationCard from "../components/chat/ConfirmationCard";
+import DateRangePicker from "../components/chat/DateRangePicker";
+import ClientPickerPanel from "../components/chat/ClientPickerPanel";
 
 const SUGGESTIONS = [
   { id: 1, text: "Create a 4N/5D incentive trip itinerary for Abu Dhabi for 45 people" },
@@ -65,6 +68,16 @@ const PIPELINE_STAGES = [
   { id: "kb",       icon: Database,    label: "Retrieving knowledge base",      delay: 5000 },
   { id: "cost",     icon: Calculator,  label: "Calculating costs & routing",    delay: 7500 },
   { id: "llm",      icon: Sparkles,    label: "Generating day-by-day itinerary",delay: 9500 },
+];
+
+// Light-touch travel facts that rotate while the user waits — kept short and useful.
+const PIPELINE_TIPS = [
+  "Pro tip: shoulder-season travel often gets you the best weather at the lowest prices.",
+  "Did you know? Tavily pulls live web data, so attractions reflect what's open right now.",
+  "Quotes assume one room per two adults — tell me if you need triples or single occupancy.",
+  "Every figure in the cost breakdown is rounded to the nearest currency-appropriate unit.",
+  "Generating a full day-by-day plan locally takes a few minutes — the LLM is the slow step.",
+  "Tip: you can ask me to upgrade hotels, swap activities, or switch currency after generation.",
 ];
 
 function useLoadingStages(isTyping) {
@@ -113,20 +126,73 @@ function useLoadingStages(isTyping) {
   return { activeStages, elapsedSec };
 }
 
-// ── Extract the first valid JSON object from any string (handles LLM preamble) ──
+// ── Extract the first valid JSON object from any string (handles LLM preamble + truncation) ──
+// LLM outputs are sometimes cut off mid-JSON (token budget). We strip preamble/fences,
+// then attempt strict parse; on failure, repair by closing unterminated strings,
+// dropping partial trailing kv-pairs, and balancing brackets. This lets the chat render
+// a usable itinerary card from a partial response instead of dumping raw JSON to the user.
 function tryParseJson(str) {
   if (!str || typeof str !== "string") return null;
-  try {
-    const t = str.trim().replace(/^```(?:json)?\n?/i, "").replace(/```\s*$/m, "");
-    const start = t.indexOf("{");
-    if (start === -1) return null;
-    let depth = 0;
-    for (let i = start; i < t.length; i++) {
-      if (t[i] === "{") depth++;
-      else if (t[i] === "}") { depth--; if (depth === 0) return JSON.parse(t.slice(start, i + 1)); }
+  const t = str.trim().replace(/^```(?:json)?\n?/i, "").replace(/```\s*$/m, "");
+  const start = t.indexOf("{");
+  if (start === -1) return null;
+  const body = t.slice(start);
+
+  // 1) Strict parse on the substring from first '{' to its matching '}' (string-aware).
+  let inStr = false, escape = false, depth = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(body.slice(0, i + 1)); } catch { break; }
+      }
     }
-    return null;
-  } catch { return null; }
+  }
+
+  // 2) Repair path — JSON is truncated. Walk and remember the last "safe" position
+  //    (just before a top-of-context comma, or at the close of a complete sub-value).
+  inStr = false; escape = false;
+  const stack = [];
+  let lastSafeEnd = -1;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "{" || c === "[") stack.push(c);
+    else if (c === "}" || c === "]") { stack.pop(); lastSafeEnd = i; }
+    else if (c === "," && stack.length > 0) lastSafeEnd = i - 1;
+  }
+  if (lastSafeEnd < 0) return null;
+
+  let repaired = body.slice(0, lastSafeEnd + 1);
+  // Strip any dangling whitespace/colon/comma at the tail
+  repaired = repaired.replace(/[\s,:]+$/, "");
+  if (!repaired.startsWith("{")) return null;
+
+  // Re-walk repaired to compute remaining open brackets (string state should be clean now)
+  const closing = [];
+  let inStr2 = false, esc2 = false;
+  for (let i = 0; i < repaired.length; i++) {
+    const c = repaired[i];
+    if (esc2) { esc2 = false; continue; }
+    if (c === "\\") { esc2 = true; continue; }
+    if (c === '"') { inStr2 = !inStr2; continue; }
+    if (inStr2) continue;
+    if (c === "{") closing.push("}");
+    else if (c === "[") closing.push("]");
+    else if (c === "}" || c === "]") closing.pop();
+  }
+  while (closing.length > 0) repaired += closing.pop();
+
+  try { return JSON.parse(repaired); } catch { return null; }
 }
 
 // ── Quick-reply chip suggestions keyed by question type ──
@@ -149,6 +215,32 @@ function getChipsForPrompt(prompt) {
   if (p.includes("hotel") || p.includes("star") || p.includes("category") || p.includes("accommodation")) return QUESTION_CHIPS.hotel;
   if (p.includes("transport") || p.includes("vehicle")) return QUESTION_CHIPS.transport;
   return [];
+}
+
+// Detect when the assistant is asking for a date so we can show a calendar
+// instead of forcing the user to type one. Returns "range" | "single" | null.
+function getDatePromptMode(prompt) {
+  if (!prompt) return null;
+  const p = prompt.toLowerCase();
+  const looksDatey = /\b(date|dates|when|depart|return|arrival|check.?in|check.?out)\b/.test(p);
+  if (!looksDatey) return null;
+  // Range first — both endpoints mentioned, or phrasing implies start+end together.
+  if (
+    /\bstart.*end\b/.test(p) ||
+    /\bfrom\b.*\bto\b/.test(p) ||
+    /\btravel\s+dates?\b/.test(p) ||
+    /\btrip\s+dates?\b/.test(p) ||
+    /\bdepart(?:ure)?\b.*\breturn\b/.test(p) ||
+    /\bdates?\b/.test(p) && !/\bstart\s+date\b|\bend\s+date\b|\breturn\s+date\b/.test(p)
+  ) {
+    return "range";
+  }
+  // Single endpoint
+  if (/\b(start|begin|depart(?:ure)?|trip\s+start|check.?in)\b/.test(p)) return "single";
+  if (/\b(end|return|trip\s+end|check.?out)\b/.test(p)) return "single";
+  // Generic "when do you want to travel" → range
+  if (/\bwhen\b/.test(p)) return "range";
+  return null;
 }
 
 // Friendly labels for collected fields shown in the context strip
@@ -180,6 +272,7 @@ function collectFieldPills(collected) {
 // ── QuestionCard — renders a need_more prompt with context + chip suggestions ──
 function QuestionCard({ text, collected, chips, onChipClick }) {
   const pills = collectFieldPills(collected);
+  const dateMode = getDatePromptMode(text);
   return (
     <div className="space-y-3">
       {pills.length > 0 && (
@@ -195,19 +288,23 @@ function QuestionCard({ text, collected, chips, onChipClick }) {
         </div>
       )}
       <p className="text-sm text-gray-800 dark:text-gray-100 leading-relaxed">{text}</p>
-      {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {chips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => onChipClick(chip)}
-              className="text-xs font-medium text-gray-700 bg-gray-100 hover:bg-[#FFFAC5] hover:text-[#8A6800] hover:border-[#FFDE39]/60 border border-gray-200 px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
+      {dateMode ? (
+        <DateRangePicker mode={dateMode} onApply={(formatted) => onChipClick(formatted)} />
+      ) : (
+        chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {chips.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => onChipClick(chip)}
+                className="text-xs font-medium text-gray-700 bg-gray-100 hover:bg-[#FFFAC5] hover:text-[#8A6800] hover:border-[#FFDE39]/60 border border-gray-200 px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
@@ -221,6 +318,12 @@ function formatChatResponse(response) {
     || tryParseJson(response.itinerary_beautified)
     || tryParseJson(response.llm_raw);
   if (itinerary && typeof itinerary === "object" && itinerary.days) return "__ITINERARY__";
+  // If we couldn't parse but the payload *looks* like JSON, don't dump it on the user —
+  // show a friendly retry message instead.
+  const looksLikeJson = (s) => typeof s === "string" && /^\s*[`{\[]/.test(s.trim().replace(/^```(?:json)?\n?/i, ""));
+  if (looksLikeJson(response.itinerary_beautified) || looksLikeJson(response.llm_raw)) {
+    return "I drafted your itinerary but the response got cut off. Could you try again, or say 'regenerate' so I can rebuild it?";
+  }
   if (response.itinerary_beautified) return response.itinerary_beautified;
   if (response.llm_raw) return response.llm_raw;
   return "I wasn't able to generate an itinerary. Please try again.";
@@ -297,8 +400,19 @@ function historyToMessages(history = [], lastLlmRaw = null, pendingConfirmationC
     if (h.role === "user" && h.content) {
       msgs.push({ id: id++, role: "user", text: h.content });
     } else if (h.role === "assistant" && h.content) {
-      // need_more prompts and formal request summaries stored as plain text
-      msgs.push({ id: id++, role: "assistant", text: h.content });
+      // need_more prompts and formal request summaries stored as plain text.
+      // If the historical message looks like a question (date prompt or has chips),
+      // promote it to a QuestionCard so the user gets the inline calendar/chips
+      // even after a refresh.
+      const datey = getDatePromptMode(h.content);
+      const chips = getChipsForPrompt(h.content);
+      const promote = !!datey || chips.length > 0;
+      msgs.push({
+        id: id++,
+        role: "assistant",
+        text: h.content,
+        ...(promote && { isQuestion: true, chips, collected: {} }),
+      });
     } else if (h.role === "assistant_raw" && h.content) {
       // Use full lastLlmRaw for the final entry (avoids truncation issues)
       const raw = (i === lastRawIdx && lastLlmRaw) ? lastLlmRaw : h.content;
@@ -311,7 +425,15 @@ function historyToMessages(history = [], lastLlmRaw = null, pendingConfirmationC
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed.days || parsed.title || parsed.destination)) {
         msgs.push({ id: id++, role: "assistant", text: "", itinerary: parsed });
       } else if (raw.trim().length > 0) {
-        msgs.push({ id: id++, role: "assistant", text: raw });
+        // Don't show a raw JSON blob to the user when our repair didn't recover an itinerary.
+        const looksLikeJson = /^\s*[`{\[]/.test(raw.trim().replace(/^```(?:json)?\n?/i, ""));
+        msgs.push({
+          id: id++,
+          role: "assistant",
+          text: looksLikeJson
+            ? "I drafted your itinerary but the response got cut off. Could you try again, or say 'regenerate' so I can rebuild it?"
+            : raw,
+        });
       }
     }
   });
@@ -390,6 +512,12 @@ const Chat = () => {
   const [historyList,    setHistoryList]    = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Client picker — gates a fresh chat until the user picks a client or skips.
+  // showClientPicker is only true for fresh chats with no existing session.
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [creatingChat,     setCreatingChat]     = useState(false);
+  const [linkedClient,     setLinkedClient]     = useState(null);
+
   const messagesEndRef   = useRef(null);
   const chatNameInputRef = useRef(null);
   const textareaRef      = useRef(null);
@@ -430,12 +558,12 @@ const Chat = () => {
       setSessionId(null);
       setChatName("New Chat");
       setLoadingSession(false);
-      // Show Zarah greeting for fresh chats with a small typing delay
-      const greeting = ZARAH_GREETINGS[Math.floor(Math.random() * ZARAH_GREETINGS.length)];
-      const t = setTimeout(() => {
-        setMessages([{ id: 1, role: "assistant", text: greeting(firstName), isGreeting: true }]);
-      }, 420);
-      return () => clearTimeout(t);
+      setLinkedClient(null);
+      // Open the client picker first so the user can attach this trip to a
+      // client (and pull in their preferences). The greeting + chat input
+      // become available once they pick or skip.
+      setShowClientPicker(true);
+      return;
     }
 
     setLoadingSession(true);
@@ -462,7 +590,45 @@ const Chat = () => {
       .finally(() => setLoadingSession(false));
   }, [sessionIdParam, firstName]);
 
-  const handleSend = useCallback(async (text) => {
+  // Common path for both "Pick client" and "Skip" — creates the chat session
+  // up-front so the backend can attach the client_id (and seed preferences)
+  // before any messages flow.
+  const finishClientSelection = useCallback(async (clientId, clientObj) => {
+    setCreatingChat(true);
+    try {
+      const res = await createChat("", clientId || null);
+      const chat = res.chat ?? res;
+      const sid = chat?.session_id;
+      setLinkedClient(clientObj || chat?.client || null);
+      setShowClientPicker(false);
+      // Show greeting (slightly customised when a client is linked) right away.
+      const greeting = ZARAH_GREETINGS[Math.floor(Math.random() * ZARAH_GREETINGS.length)];
+      const baseText = greeting(firstName);
+      const greetingText = clientObj
+        ? `${baseText}\n\nI've pulled in preferences for **${clientObj.company_name ?? clientObj.company ?? "this client"}** — I'll keep them in mind while we plan.`
+        : baseText;
+      setMessages([{ id: 1, role: "assistant", text: greetingText, isGreeting: true }]);
+      if (sid) {
+        setSessionId(sid);
+        try { localStorage.setItem(LAST_SESSION_KEY, sid); } catch {}
+        const url = new URL(window.location.href);
+        url.searchParams.set("session", sid);
+        url.searchParams.delete("new");
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch (err) {
+      // If chat creation fails, fall back to the legacy on-first-message
+      // creation path so the user is never blocked.
+      console.error("createChat failed:", err);
+      setShowClientPicker(false);
+      const greeting = ZARAH_GREETINGS[Math.floor(Math.random() * ZARAH_GREETINGS.length)];
+      setMessages([{ id: 1, role: "assistant", text: greeting(firstName), isGreeting: true }]);
+    } finally {
+      setCreatingChat(false);
+    }
+  }, [firstName]);
+
+  const handleSend = useCallback(async (text, meta) => {
     const msg = (text || query).trim();
     if (!msg || isTyping) return;
     setLastError(null);
@@ -483,7 +649,7 @@ const Chat = () => {
     setIsGenerating(looksLikeGenerate);
     try {
       const currentSid = sessionId;
-      const response = await sendChatMessage(currentSid, msg);
+      const response = await sendChatMessage(currentSid, msg, meta);
       const returnedSid = response.session_id ?? currentSid;
       if (returnedSid && returnedSid !== sessionId) {
         setSessionId(returnedSid);
@@ -633,7 +799,7 @@ const Chat = () => {
   };
 
   const inputBar = (
-    <div className="flex items-center bg-white dark:bg-[#3a3d44] rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10 px-4 py-2.5 transition-all duration-300 focus-within:shadow-[0_4px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-200 dark:focus-within:border-white/20">
+    <div className="flex items-center bg-white dark:bg-[#2A2929] rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10 px-4 py-2.5 transition-all duration-300 focus-within:shadow-[0_4px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-200 dark:focus-within:border-white/20">
       <button
         className="p-1 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white transition-colors duration-200 cursor-pointer flex-shrink-0"
         aria-label="Attach file"
@@ -677,12 +843,12 @@ const Chat = () => {
 
       {/* ── History slide-in panel ── */}
       <div
-        className={`absolute inset-y-0 right-0 w-72 bg-white dark:bg-[#3a3d44] z-30 flex flex-col shadow-[-6px_0_24px_rgba(0,0,0,0.08)] border-l border-gray-100/80 dark:border-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute inset-y-0 right-0 w-72 bg-white dark:bg-[#2A2929] z-30 flex flex-col shadow-[-6px_0_24px_rgba(0,0,0,0.08)] border-l border-gray-100/80 dark:border-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           showHistory ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {/* Panel header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#FFFCE6] to-[#FFFAC5] dark:from-[#3a3d44] dark:to-[#2c2e34] border-b border-[#FFDE39]/25 dark:border-[#FFDE39]/15">
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#FFFCE6] to-[#FFFAC5] dark:from-[#2A2929] dark:to-[#1F1F1F] border-b border-[#FFDE39]/25 dark:border-[#FFDE39]/15">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
             <Clock size={14} className="text-[#E6C800] dark:text-[#FFDE39]" />
             Chat History
@@ -780,7 +946,7 @@ const Chat = () => {
 
       {/* ── Loading ── */}
       {loadingSession ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-[#3a3d44] rounded-2xl">
+        <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-[#2A2929] rounded-2xl">
           <RefreshCw size={24} className="animate-spin text-gray-400 dark:text-gray-300" />
         </div>
 
@@ -799,11 +965,19 @@ const Chat = () => {
           </div>
 
           {/* Chat panel — narrower than full container, centered */}
-          <div className="mx-auto w-full max-w-[1440px] flex-1 flex flex-col px-4 sm:px-6 py-3 relative rounded-2xl bg-[#f3f1ec] dark:bg-[#2c2e34]/60 border-2 border-transparent focus-within:border-[#FFDE39]/55 focus-within:shadow-[0_6px_28px_-4px_rgba(255,222,57,0.18)] focus-within:bg-[#ebe8e1] dark:focus-within:bg-white/[0.04] transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
+          <div className="mx-auto w-full max-w-[1440px] flex-1 flex flex-col px-4 sm:px-6 py-3 relative rounded-2xl bg-[#f9f8f4] dark:bg-white/[0.02] dark:focus-within:bg-white/[0.04] transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
 
-          {/* Centered greeting + input + suggestion cards */}
+          {/* Centered greeting + input + suggestion cards (or client picker) */}
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="w-full max-w-[760px]">
+              {showClientPicker ? (
+                <ClientPickerPanel
+                  busy={creatingChat}
+                  onPick={({ clientId, client }) => finishClientSelection(clientId, client)}
+                  onSkip={() => finishClientSelection(null, null)}
+                />
+              ) : (
+                <>
               {/* Greeting block — left-aligned to match Figma */}
               <div className="mb-6 pl-1">
                 <p className="text-[16px] text-[#1f1f1f] dark:text-gray-300 font-normal mb-1 font-poppins">
@@ -821,13 +995,15 @@ const Chat = () => {
                   <button
                     key={s.id}
                     onClick={() => handleSend(s.text)}
-                    className="text-left bg-white dark:bg-[#3a3d44] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] p-3.5 text-[12px] text-gray-600 dark:text-gray-300 leading-[1.5] hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 hover:border-gray-200 dark:hover:border-white/20 transition-all duration-300 group flex flex-col justify-between min-h-[88px] font-poppins"
+                    className="text-left bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] p-3.5 text-[12px] text-gray-600 dark:text-gray-300 leading-[1.5] hover:shadow-[0_3px_10px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 hover:border-gray-200 dark:hover:border-white/20 transition-all duration-300 group flex flex-col justify-between min-h-[88px] font-poppins"
                   >
                     <span className="line-clamp-3">{s.text}</span>
                     <ArrowRight size={13} className="mt-1.5 text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white transition-colors duration-200 self-end" />
                   </button>
                 ))}
               </div>
+                </>
+              )}
             </div>
           </div>
           </div>
@@ -835,9 +1011,9 @@ const Chat = () => {
 
       ) : (
         /* ── Active chat ── */
-        <div className="mx-auto w-full max-w-[1620px] flex-1 flex flex-col overflow-hidden animate-fadeIn bg-[#f3f1ec] dark:bg-[#2c2e34]/60 rounded-2xl p-3 border-2 border-transparent focus-within:border-[#FFDE39]/45 focus-within:shadow-[0_6px_28px_-4px_rgba(255,222,57,0.14)] transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
+        <div className="mx-auto w-full max-w-[1620px] flex-1 flex flex-col overflow-hidden animate-fadeIn bg-[#f9f8f4] dark:bg-white/[0.02] rounded-2xl p-3 transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
           {/* Sub-header strip — chat title + actions, full width (no outer gutter) */}
-          <div className="bg-white dark:bg-[#3a3d44] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-2.5 flex items-center justify-between mb-3 flex-shrink-0">
+          <div className="bg-white dark:bg-[#2A2929] rounded-xl border border-gray-100 dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-2.5 flex items-center justify-between mb-3 flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <MessageSquare size={14} className="text-[#E6C800] flex-shrink-0" />
               {isEditingName ? (
@@ -896,7 +1072,7 @@ const Chat = () => {
                 if (msg.role === "user") {
                   return (
                     <div key={msg.id} className="flex justify-end animate-fadeIn">
-                      <div className="bg-white dark:bg-[#3a3d44] rounded-xl px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] border border-gray-200/80 dark:border-white/10 max-w-[70%] text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">
+                      <div className="bg-white dark:bg-[#2A2929] rounded-xl px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] border border-gray-200/80 dark:border-white/10 max-w-[70%] text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">
                         {msg.text}
                       </div>
                     </div>
@@ -919,7 +1095,7 @@ const Chat = () => {
                     <div key={msg.id} className="flex justify-start animate-fadeIn">
                       <ConfirmationCard
                         fields={msg.confirmationFields}
-                        onConfirm={() => handleSend("confirm")}
+                        onConfirm={(currency) => handleSend("confirm", { currency })}
                       />
                     </div>
                   );
@@ -929,7 +1105,7 @@ const Chat = () => {
                   const fb = msg.fallbackContent;
                   return (
                     <div key={msg.id} className="flex justify-start animate-fadeIn">
-                      <div className="bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-2xl px-5 py-4 max-w-[640px] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                      <div className="bg-white dark:bg-[#2A2929] border border-gray-100 dark:border-white/10 rounded-2xl px-5 py-4 max-w-[640px] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                         <p className="text-[14px] font-semibold text-gray-900 dark:text-white">
                           {fb.greeting}
                         </p>
@@ -959,7 +1135,7 @@ const Chat = () => {
                   // Itinerary card stays white per spec — design unchanged
                   return (
                     <div key={msg.id} className="flex justify-start animate-fadeIn">
-                      <div className="w-full bg-white dark:bg-[#3a3d44] rounded-xl px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10">
+                      <div className="w-full bg-white dark:bg-[#2A2929] rounded-xl px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-white/10">
                         <Sparkles size={15} className="text-[#FFDE39] fill-[#FFDE39] mb-2.5" />
                         <ItineraryDisplay
                           itinerary={itineraryObj}
@@ -983,20 +1159,34 @@ const Chat = () => {
                         background: "linear-gradient(135deg, #FFF690 0%, #E9E6CA 100%)",
                       }}
                     >
-                      <div className="bg-white dark:bg-[#3a3d44] rounded-[11px] px-4 py-3">
+                      <div className="bg-white dark:bg-[#2A2929] rounded-[11px] px-4 py-3">
                         <Sparkles size={18} className="text-[#1f1f1f] dark:text-[#FFDE39] fill-[#1f1f1f] dark:fill-[#FFDE39] mb-2" />
-                        {msg.isQuestion ? (
-                          <QuestionCard
-                            text={msg.text}
-                            collected={msg.collected || {}}
-                            chips={msg.chips || []}
-                            onChipClick={(chip) => handleSend(chip)}
-                          />
-                        ) : (
-                          <p className="text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-poppins">
-                            {msg.text}
-                          </p>
-                        )}
+                        {(() => {
+                          // Date-prompt safety net: any assistant text the regex
+                          // recognises as a date question gets the inline calendar,
+                          // even if it slipped through without an isQuestion flag.
+                          const datey = !msg.isQuestion ? getDatePromptMode(msg.text) : null;
+                          if (msg.isQuestion) {
+                            return (
+                              <QuestionCard
+                                text={msg.text}
+                                collected={msg.collected || {}}
+                                chips={msg.chips || []}
+                                onChipClick={(chip) => handleSend(chip)}
+                              />
+                            );
+                          }
+                          return (
+                            <>
+                              <p className="text-[14px] text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap font-poppins">
+                                {msg.text}
+                              </p>
+                              {datey && (
+                                <DateRangePicker mode={datey} onApply={(formatted) => handleSend(formatted)} />
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1005,7 +1195,7 @@ const Chat = () => {
 
               {isTyping && !isGenerating && (
                 <div className="flex justify-start animate-fadeIn">
-                  <div className="bg-white dark:bg-[#3a3d44] border border-gray-100 dark:border-white/10 rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-1.5">
+                  <div className="bg-white dark:bg-[#2A2929] border border-gray-100 dark:border-white/10 rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "0ms" }} />
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "120ms" }} />
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-300 animate-bounce" style={{ animationDelay: "240ms" }} />
@@ -1013,87 +1203,133 @@ const Chat = () => {
                 </div>
               )}
 
-              {isTyping && isGenerating && (
-                <div className="flex justify-start animate-fadeIn">
-                  <div
-                    className="rounded-xl min-w-[240px] shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
-                    style={{
-                      padding: "1.2px",
-                      background: "linear-gradient(135deg, #FFF690 0%, #E9E6CA 100%)",
-                    }}
-                  >
-                    <div className="bg-white dark:bg-[#3a3d44] rounded-[11px] px-4 py-3">
-                      <Sparkles size={18} className="text-[#1f1f1f] dark:text-[#FFDE39] fill-[#1f1f1f] dark:fill-[#FFDE39] mb-2" />
-                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-3 tracking-wide uppercase">Building your itinerary</p>
-                      <div className="space-y-2">
-                        {(() => {
-                          // Find the highest-index stage that has fired — that one is "current"
-                          // (shows the spinner). Earlier stages show Done. Later ones are muted.
-                          const lastDoneIdx = PIPELINE_STAGES.reduce(
-                            (acc, s, idx) => (activeStages.includes(s.id) ? idx : acc),
-                            -1
-                          );
-                          return PIPELINE_STAGES.map((stage, idx) => {
-                            const StageIcon = stage.icon;
-                            const status =
-                              idx < lastDoneIdx ? "past"
-                              : idx === lastDoneIdx ? "current"
-                              : "future";
-                            return (
-                              <div
-                                key={stage.id}
-                                className={`flex items-center gap-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                  status === "future" ? "opacity-30" : "opacity-100 animate-fadeIn"
-                                }`}
-                              >
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
-                                  status === "current" ? "bg-[#FFDE39] dark:bg-[#FFDE39] scale-110"
-                                  : status === "past"  ? "bg-green-100 dark:bg-green-900/40"
-                                  : "bg-gray-100 dark:bg-white/10"
-                                }`}>
-                                  {status === "past"
-                                    ? <Check size={9} className="text-green-600 dark:text-green-400" />
-                                    : <StageIcon size={9} className={
-                                        status === "current" ? "text-dark-300"
-                                        : "text-gray-400 dark:text-gray-500"
-                                      } />}
-                                </div>
-                                <span className={`text-[12.5px] transition-colors duration-300 ${
-                                  status === "current" ? "text-gray-900 dark:text-white font-semibold"
-                                  : status === "past" ? "text-gray-700 dark:text-gray-300 font-medium"
-                                  : "text-gray-500 dark:text-gray-400"
-                                }`}>
-                                  {stage.label}
-                                </span>
-                                {status === "current" && (
-                                  <span className="ml-auto flex items-center gap-1.5">
-                                    {elapsedSec > 0 && (
-                                      <span className="text-[10px] tabular-nums text-gray-500 dark:text-gray-400 font-medium">
-                                        {elapsedSec < 60
-                                          ? `${elapsedSec}s`
-                                          : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`}
+              {isTyping && isGenerating && (() => {
+                const lastDoneIdx = PIPELINE_STAGES.reduce(
+                  (acc, s, idx) => (activeStages.includes(s.id) ? idx : acc),
+                  -1
+                );
+                const visibleIdx = Math.max(0, lastDoneIdx);
+                // Progress: each stage worth ~20%; current stage shows partial (~half) until next fires
+                const progressPct = lastDoneIdx < 0
+                  ? 6
+                  : Math.min(100, ((lastDoneIdx + 0.5) / PIPELINE_STAGES.length) * 100);
+                const currentTip = PIPELINE_TIPS[Math.floor(elapsedSec / 5) % PIPELINE_TIPS.length];
+                const elapsedLabel = elapsedSec < 60
+                  ? `${elapsedSec}s`
+                  : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s`;
+                return (
+                  <div className="flex justify-start animate-fadeIn">
+                    <div
+                      className="relative rounded-2xl w-[360px] max-w-[92%] overflow-hidden shadow-[0_8px_28px_rgba(255,222,57,0.18)] dark:shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
+                      style={{
+                        padding: "1.5px",
+                        background: "linear-gradient(135deg,#FFDE39 0%,#FFF690 45%,#E9E6CA 100%)",
+                      }}
+                    >
+                      <div className="bg-white dark:bg-[#2A2929] rounded-[15px] overflow-hidden">
+                        {/* Top progress strip */}
+                        <div className="relative h-1 bg-gray-100 dark:bg-white/5 overflow-hidden">
+                          <div
+                            className="absolute inset-y-0 left-0 transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] bg-gradient-to-r from-[#FFDE39] via-[#FFF690] to-[#FFDE39] bg-[length:200%_100%] animate-shimmer"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+
+                        <div className="px-4 pt-3.5 pb-4">
+                          {/* Header row */}
+                          <div className="flex items-center justify-between mb-3.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#FFDE39] to-[#FFB800] flex items-center justify-center shadow-[0_3px_10px_rgba(255,222,57,0.45)] flex-shrink-0">
+                                <Sparkles size={15} className="text-[#1f1f1f]" strokeWidth={2.5} />
+                                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white dark:border-[#2A2929] animate-pulse" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[9.5px] font-bold text-gray-400 dark:text-gray-400 uppercase tracking-[0.16em] leading-none">Zarah is working</p>
+                                <p className="text-[13.5px] font-bold text-gray-900 dark:text-white leading-tight mt-1">Building your itinerary</p>
+                              </div>
+                            </div>
+                            <div className="text-right pl-2 flex-shrink-0">
+                              <p className="text-[9.5px] text-gray-400 dark:text-gray-500 leading-none">Step {visibleIdx + 1}/{PIPELINE_STAGES.length}</p>
+                              <p className="text-[12px] tabular-nums font-semibold text-gray-700 dark:text-gray-200 mt-1">{elapsedLabel}</p>
+                            </div>
+                          </div>
+
+                          {/* Vertical timeline */}
+                          <div className="relative">
+                            <div className="absolute left-[10.5px] top-3 bottom-3 w-px bg-gradient-to-b from-gray-200 via-gray-200 to-gray-100 dark:from-white/10 dark:via-white/10 dark:to-white/5" />
+                            <div className="space-y-2.5">
+                              {PIPELINE_STAGES.map((stage, idx) => {
+                                const StageIcon = stage.icon;
+                                const status =
+                                  idx < lastDoneIdx ? "past"
+                                  : idx === lastDoneIdx ? "current"
+                                  : "future";
+                                return (
+                                  <div
+                                    key={stage.id}
+                                    className={`relative flex items-center gap-3 transition-all duration-500 ${
+                                      status === "future" ? "opacity-40" : "opacity-100 animate-fadeIn"
+                                    }`}
+                                  >
+                                    <div className={`relative z-10 w-[22px] h-[22px] rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                                      status === "current"
+                                        ? "bg-gradient-to-br from-[#FFDE39] to-[#FFB800] shadow-[0_0_0_4px_rgba(255,222,57,0.18)] scale-110"
+                                        : status === "past"
+                                          ? "bg-green-500 dark:bg-green-500"
+                                          : "bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10"
+                                    }`}>
+                                      {status === "past"
+                                        ? <Check size={11} strokeWidth={3} className="text-white" />
+                                        : <StageIcon size={11} className={
+                                            status === "current" ? "text-[#1f1f1f]" : "text-gray-400 dark:text-gray-400"
+                                          } strokeWidth={status === "current" ? 2.5 : 2} />}
+                                      {status === "current" && (
+                                        <span className="absolute inset-0 rounded-full border-2 border-[#FFDE39] animate-pulseRing pointer-events-none" />
+                                      )}
+                                    </div>
+                                    <p className={`flex-1 text-[12.5px] leading-snug transition-colors duration-300 ${
+                                      status === "current" ? "text-gray-900 dark:text-white font-semibold"
+                                      : status === "past" ? "text-gray-600 dark:text-gray-400"
+                                      : "text-gray-400 dark:text-gray-500"
+                                    }`}>
+                                      {stage.label}
+                                    </p>
+                                    {status === "current" && (
+                                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-[#8A6800] dark:text-[#1f1f1f] bg-[#FFFAC5] dark:bg-[#FFDE39] px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                                        In progress
                                       </span>
                                     )}
-                                    <RefreshCw size={10} className="animate-spin text-gray-500 dark:text-gray-300" />
-                                  </span>
-                                )}
-                                {status === "past" && (
-                                  <span className="ml-auto text-[9px] text-green-600 dark:text-green-400 font-medium">Done</span>
-                                )}
+                                    {status === "past" && (
+                                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400 whitespace-nowrap flex-shrink-0">
+                                        Done
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Rotating helpful tip — appears once we're a few seconds in */}
+                          {elapsedSec > 8 && (
+                            <div
+                              key={currentTip}
+                              className="mt-3.5 pt-3 border-t border-gray-100 dark:border-white/10 flex items-start gap-2.5 animate-fadeIn"
+                            >
+                              <div className="w-5 h-5 rounded-full bg-[#FFFAC5] dark:bg-[#FFDE39]/15 flex items-center justify-center flex-shrink-0 mt-[1px]">
+                                <Sparkles size={10} className="text-[#8A6800] dark:text-[#FFDE39]" />
                               </div>
-                            );
-                          });
-                        })()}
+                              <p className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-snug">
+                                {currentTip}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {elapsedSec > 30 && (
-                        <p className="mt-3 pt-2.5 border-t border-gray-100 dark:border-white/10 text-[10.5px] text-gray-500 dark:text-gray-400 leading-snug">
-                          Generating a full day-by-day itinerary on a local LLM can take a few minutes — this is the slow step. Hold tight, your itinerary will appear automatically when ready.
-                        </p>
-                      )}
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <div ref={messagesEndRef} />
               </div>
             </div>
@@ -1119,7 +1355,7 @@ const Chat = () => {
                   </div>
                 </div>
               )}
-              {inputBar}
+              {!showClientPicker && inputBar}
               {lastError && (
                 <p className="mt-1.5 text-[11px] text-red-500 text-center">⚠️ {lastError}</p>
               )}

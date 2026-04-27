@@ -99,7 +99,7 @@ const Sidebar = ({ showProfile = false, collapsed: collapsedProp, onToggleCollap
     <aside
       className={`
         relative bg-sidebar h-full flex flex-col
-        rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.08)]
+        rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.45)]
         transition-[width] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
         ${collapsed ? "w-[80px]" : "w-[256px]"}
       `}

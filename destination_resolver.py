@@ -43,6 +43,9 @@ _HARD_BLOCKLIST: Set[str] = {
     # Trip-style tokens
     "leisure", "corporate", "incentive", "honeymoon", "anniversary",
     "wedding", "vacation", "holiday", "getaway",
+    # Hotel/amenity descriptors that collide with obscure DB city names
+    # (Star, ID; Date, Hokkaido; Beach, ND; Pool, Dorset; Spa, Belgium)
+    "star", "date", "beach", "pool", "spa",
     # Meals / categories
     "breakfast", "lunch", "dinner", "meal", "vegetarian", "vegan", "halal",
     "kosher", "snack", "drink",

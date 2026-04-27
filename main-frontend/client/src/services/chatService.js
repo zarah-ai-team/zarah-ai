@@ -1,8 +1,12 @@
 import { api } from "./api";
 
-/** Send a message to the /api/chat conversational endpoint. */
-export async function sendChatMessage(sessionId, message) {
-  return api.post("/api/chat", { session_id: sessionId, message });
+/** Send a message to the /api/chat conversational endpoint.
+ *  `meta` is an optional dict for sideband data (e.g. { currency: "USD" })
+ *  that the backend can pick up without polluting the user-visible message text. */
+export async function sendChatMessage(sessionId, message, meta) {
+  const body = { session_id: sessionId, message };
+  if (meta && typeof meta === "object" && Object.keys(meta).length > 0) body.meta = meta;
+  return api.post("/api/chat", body);
 }
 
 /** Load an existing chat session (history + metadata). */
@@ -15,9 +19,12 @@ export async function listChats() {
   return api.get("/api/chats");
 }
 
-/** Create a new chat session. */
-export async function createChat(chatName = "") {
-  return api.post("/api/chats", { chat_name: chatName });
+/** Create a new chat session. When `clientId` is set, the backend links the
+ *  chat to that client and seeds the planner with their stored preferences. */
+export async function createChat(chatName = "", clientId = null) {
+  const body = { chat_name: chatName };
+  if (clientId) body.client_id = clientId;
+  return api.post("/api/chats", body);
 }
 
 /** Delete a chat session. */
